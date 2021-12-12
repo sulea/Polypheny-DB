@@ -1,0 +1,120 @@
+/*
+ * Copyright 2019-2021 The Polypheny Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.polypheny.db.misc;
+
+import static org.junit.Assert.assertTrue;
+
+import com.google.common.collect.ImmutableList;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.Arrays;
+import org.junit.Ignore;
+import org.junit.Test;
+import org.polypheny.db.TestHelper;
+import org.polypheny.db.TestHelper.JdbcConnection;
+import org.polypheny.db.TestHelper.MongoConnection;
+import org.polypheny.db.mql.MqlTestTemplate;
+import org.polypheny.db.webui.models.Result;
+
+public class ProviderTest extends MqlTestTemplate {
+    @Test
+    public void ddlEnumerableTest() {
+        insert( "{\"hi\":3,\"stock\":3}" );
+
+        MongoConnection.executeGetResponse( "db.test.update({ \"hi\": 3 },{\"$inc\": {\"stock\": 2}})" );
+        Result res = find( "{}", "{}" );
+        System.out.println( Arrays.deepToString( res.getData() ) );
+
+        assertTrue(
+                MongoConnection.checkResultSet( res,
+                        ImmutableList.of( new Object[]{ "id_", "{\"hi\":3,\"stock\":5}" } ) ) );
+    }
+
+
+    @Test
+    public void ddlEnumerableFilterTest() {
+        insert( "{\"hi\":3,\"stock\":3}" );
+        insert( "{\"hi\":5,\"stock\":3}" );
+
+        MongoConnection.executeGetResponse( "db.test.update({ \"hi\": 3 },{\"$inc\": {\"stock\": 3}})" );
+        Result res = find( "{}", "{}" );
+        System.out.println( Arrays.deepToString( res.getData() ) );
+
+        assertTrue(
+                MongoConnection.checkUnorderedResultSet( res,
+                        ImmutableList.of(
+                                new String[]{ "id_", "{\"hi\":3,\"stock\":6}" },
+                                new String[]{ "id_", "{\"hi\":5,\"stock\":3}" }
+                        ), true ) );
+    }
+
+
+    @Test
+    public void ddlEnumerableTestFilter() {
+        insert( "{\"hi\":3,\"stock\":3}" );
+
+        find( "{\"hi\":3}", "{}" );
+
+    }
+
+
+    @Ignore
+    @Test
+    public void ddlNormalTest() throws SQLException {
+        TestHelper.getInstance();
+        try ( JdbcConnection polyphenyDbConnection = new JdbcConnection( true ) ) {
+            Connection connection = polyphenyDbConnection.getConnection();
+            try ( Statement statement = connection.createStatement() ) {
+                statement.executeUpdate( "CREATE TABLE emps( "
+                        + "tprimary INTEGER NOT NULL, "
+                        + "tinteger INTEGER NULL, "
+                        + "tvarchar VARCHAR(20) NULL, "
+                        + "PRIMARY KEY (tprimary) )" );
+                statement.executeUpdate( "INSERT INTO emps VALUES (1,1,'foo'), (2,5,'bar'), (3,7,'foobar')" );
+
+                statement.executeQuery( "SELECT \"tprimary\" FROM \"public\".\"emps\"" );
+
+                connection.commit();
+
+            }
+        }
+    }
+
+
+    @Ignore
+    @Test
+    public void ddlSqlUpdateTest() throws SQLException {
+        TestHelper.getInstance();
+        try ( JdbcConnection polyphenyDbConnection = new JdbcConnection( true ) ) {
+            Connection connection = polyphenyDbConnection.getConnection();
+            try ( Statement statement = connection.createStatement() ) {
+                statement.executeUpdate( "CREATE TABLE emps( "
+                        + "tprimary INTEGER NOT NULL, "
+                        + "tinteger INTEGER NULL, "
+                        + "tvarchar VARCHAR(20) NULL, "
+                        + "PRIMARY KEY (tprimary) )" );
+                statement.executeUpdate( "INSERT INTO emps VALUES (1,1,'foo'), (2,5,'bar'), (3,7,'foobar')" );
+
+                statement.executeQuery( "UPDATE \"emps\" SET \"tprimary\" = \"tprimary\" + 8 WHERE \"tprimary\" = 1" );
+
+                connection.commit();
+
+            }
+        }
+    }
+}

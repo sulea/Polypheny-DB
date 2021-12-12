@@ -52,7 +52,7 @@ public class JdbcTableScan extends TableScan implements JdbcAlg {
     protected final JdbcTable jdbcTable;
 
 
-    protected JdbcTableScan( AlgOptCluster cluster, AlgOptTable table, JdbcTable jdbcTable, JdbcConvention jdbcConvention ) {
+    public JdbcTableScan( AlgOptCluster cluster, AlgOptTable table, JdbcTable jdbcTable, JdbcConvention jdbcConvention ) {
         super( cluster, cluster.traitSetOf( jdbcConvention ), table );
         this.jdbcTable = jdbcTable;
         assert jdbcTable != null;

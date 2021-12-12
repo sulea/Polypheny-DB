@@ -39,6 +39,7 @@ import org.polypheny.db.algebra.logical.LogicalDocuments;
 import org.polypheny.db.algebra.logical.LogicalFilter;
 import org.polypheny.db.algebra.logical.LogicalModifyCollect;
 import org.polypheny.db.algebra.logical.LogicalProject;
+import org.polypheny.db.algebra.logical.LogicalProvider;
 import org.polypheny.db.algebra.logical.LogicalTableModify;
 import org.polypheny.db.algebra.logical.LogicalTableScan;
 import org.polypheny.db.algebra.logical.LogicalValues;
@@ -817,6 +818,8 @@ public class DmlRouterImpl extends BaseRouter implements DmlRouter {
                 }
             }
             return super.handleGeneric( node, builder );
+        } else if ( node instanceof LogicalProvider ) {
+            return builder.push( node );
         } else {
             return super.handleGeneric( node, builder );
         }

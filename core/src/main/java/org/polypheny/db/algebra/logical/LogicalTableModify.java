@@ -35,7 +35,9 @@ package org.polypheny.db.algebra.logical;
 
 
 import java.util.List;
+import lombok.Setter;
 import org.polypheny.db.algebra.AlgNode;
+import org.polypheny.db.algebra.AlgRoot;
 import org.polypheny.db.algebra.core.TableModify;
 import org.polypheny.db.plan.AlgOptCluster;
 import org.polypheny.db.plan.AlgOptTable;
@@ -49,6 +51,9 @@ import org.polypheny.db.rex.RexNode;
  * Sub-class of {@link TableModify} not targeted at any particular engine or calling convention.
  */
 public final class LogicalTableModify extends TableModify {
+
+    @Setter
+    private AlgRoot routedSelect;
 
     /**
      * Creates a LogicalTableModify.

@@ -46,6 +46,9 @@ import java.util.Map;
 import java.util.SortedSet;
 import java.util.stream.Collectors;
 import org.apache.calcite.linq4j.tree.Expressions;
+import org.polypheny.db.adapter.jdbc.JdbcConvention;
+import org.polypheny.db.adapter.jdbc.JdbcTable;
+import org.polypheny.db.adapter.jdbc.JdbcTableScan;
 import org.polypheny.db.algebra.AlgFieldCollation;
 import org.polypheny.db.algebra.AlgNode;
 import org.polypheny.db.algebra.constant.JoinConditionType;
@@ -61,6 +64,7 @@ import org.polypheny.db.algebra.core.JoinAlgType;
 import org.polypheny.db.algebra.core.Match;
 import org.polypheny.db.algebra.core.Minus;
 import org.polypheny.db.algebra.core.Project;
+import org.polypheny.db.algebra.core.Provider;
 import org.polypheny.db.algebra.core.Sort;
 import org.polypheny.db.algebra.core.TableModify;
 import org.polypheny.db.algebra.core.TableScan;
@@ -72,12 +76,14 @@ import org.polypheny.db.algebra.type.AlgDataTypeField;
 import org.polypheny.db.languages.OperatorRegistry;
 import org.polypheny.db.languages.ParserPos;
 import org.polypheny.db.nodes.Node;
+import org.polypheny.db.rex.RexBuilder;
 import org.polypheny.db.rex.RexCall;
 import org.polypheny.db.rex.RexLiteral;
 import org.polypheny.db.rex.RexLocalRef;
 import org.polypheny.db.rex.RexNode;
 import org.polypheny.db.rex.RexProgram;
 import org.polypheny.db.sql.sql.SqlCall;
+import org.polypheny.db.sql.sql.SqlCollation;
 import org.polypheny.db.sql.sql.SqlDelete;
 import org.polypheny.db.sql.sql.SqlDialect;
 import org.polypheny.db.sql.sql.SqlIdentifier;
@@ -94,6 +100,7 @@ import org.polypheny.db.sql.sql.SqlUpdate;
 import org.polypheny.db.sql.sql.fun.SqlRowOperator;
 import org.polypheny.db.sql.sql.fun.SqlSingleValueAggFunction;
 import org.polypheny.db.sql.sql.validate.SqlValidatorUtil;
+import org.polypheny.db.util.NlsString;
 import org.polypheny.db.util.Pair;
 import org.polypheny.db.util.ReflectUtil;
 import org.polypheny.db.util.ReflectiveVisitor;
@@ -409,6 +416,26 @@ public abstract class AlgToSqlConverter extends SqlImplementor implements Reflec
 
 
     /**
+     * @see #dispatch filter
+     */
+    public Result visit( Provider e ) {
+        RexBuilder rexBuilder = e.getCluster().getRexBuilder();
+        Result x = result(
+                new SqlIdentifier( e.getTable().getQualifiedName(), ParserPos.ZERO ),
+                ImmutableList.of( Clause.FROM ),
+                new JdbcTableScan( e.getCluster(), e.getTable(), (JdbcTable) e.getTable().getTable(), new JdbcConvention( dialect, null, "DUMMY" ) ),
+                null );
+        parseCorrelTable( e, x );
+
+        final Builder builder = x.builder( e, isUnion, Clause.WHERE );
+
+        builder.setWhere( builder.context.toSql( null, e.getEnumerableCondition( rexBuilder ) ) );
+        return builder.result();
+
+    }
+
+
+    /**
      * @see #dispatch
      */
     public Result visit( Sort e ) {
@@ -471,12 +498,16 @@ public abstract class AlgToSqlConverter extends SqlImplementor implements Reflec
                 return result( sqlInsert, ImmutableList.of(), modify, null );
             }
             case UPDATE: {
+                if ( modify.getInput() instanceof Provider ) {
+                    ((Provider) modify.getInput()).setTable( modify.getTable() );
+                }
                 final Result input = visitChild( 0, modify.getInput() );
+                RexNode val = modify.getCluster().getRexBuilder().makeCharLiteral( new NlsString( "{\"test\":\"great success\"}", null, SqlCollation.IMPLICIT ) );
                 final SqlUpdate sqlUpdate = new SqlUpdate(
                         POS,
                         sqlTargetTable,
                         physicalIdentifierList( modify.getTable().getQualifiedName(), modify.getUpdateColumnList() ),
-                        exprList( context, modify.getSourceExpressionList() ),
+                        exprList( context, modify.getInput() instanceof Provider ? ((Provider) modify.getInput()).getUpdatedValue() : modify.getSourceExpressionList() ),
                         ((SqlSelect) input.node).getWhere(),
                         input.asSelect(),
                         null );

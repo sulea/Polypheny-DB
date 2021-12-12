@@ -60,10 +60,14 @@ import org.polypheny.db.algebra.constant.ExplainLevel;
 import org.polypheny.db.algebra.constant.Kind;
 import org.polypheny.db.algebra.core.ConditionalExecute;
 import org.polypheny.db.algebra.core.ConditionalExecute.Condition;
+import org.polypheny.db.algebra.core.Filter;
+import org.polypheny.db.algebra.core.Project;
 import org.polypheny.db.algebra.core.Sort;
 import org.polypheny.db.algebra.core.Values;
 import org.polypheny.db.algebra.logical.LogicalConditionalExecute;
+import org.polypheny.db.algebra.logical.LogicalFilter;
 import org.polypheny.db.algebra.logical.LogicalProject;
+import org.polypheny.db.algebra.logical.LogicalProvider;
 import org.polypheny.db.algebra.logical.LogicalTableModify;
 import org.polypheny.db.algebra.logical.LogicalTableScan;
 import org.polypheny.db.algebra.logical.LogicalValues;
@@ -360,6 +364,39 @@ public abstract class AbstractQueryProcessor implements QueryProcessor, Executio
             if ( isAnalyze ) {
                 statement.getProcessingDuration().stop( "Index Lookup Rewrite" );
                 statement.getProcessingDuration().start( "Routing" );
+            }
+
+            // atm all filter are removed, even if the adapter could be capable of handling it itself,
+            // for the future to prevent this the routed node could be checked and only substituted if it
+            // is of another type then the adapter
+            if ( indexLookupRoot.alg instanceof LogicalTableModify && ((LogicalTableModify) indexLookupRoot.alg).getInput() instanceof LogicalFilter ) {
+                LogicalTableModify modify = ((LogicalTableModify) indexLookupRoot.alg);
+                AlgRoot filter = AlgRoot.of( modify.getInput(), Kind.SELECT );
+
+                // add all previous variables e.g. _id, _data(previous), _data(updated)
+                // might only extract previous refs used in condition e.g. _data
+                List<String> update = new ArrayList<>( filter.validatedRowType.getFieldNames() );
+                List<RexNode> source = filter.validatedRowType.getFieldList().stream().map( f -> RexInputRef.of( f.getIndex(), filter.validatedRowType ) ).collect( Collectors.toList() );
+
+                update.addAll( modify.getUpdateColumnList() );
+                source.addAll( modify.getSourceExpressionList() );
+
+                Project project = LogicalProject.create( modify.getInput(), source, update );
+                AlgRoot updated = AlgRoot.of( project, Kind.SELECT );
+
+                /*RelRoot routed = route( filter, statement, executionTimeMonitor );
+                RelStructuredTypeFlattener typeFlattener = new RelStructuredTypeFlattener(
+                        RelBuilder.create( statement, routed.rel.getCluster() ),
+                        routed.rel.getCluster().getRexBuilder(),
+                        ViewExpanders.toRelContext( this, routed.rel.getCluster() ),
+                        true );
+                routed = routed.withRel( typeFlattener.rewrite( routed.rel ) );
+                routed = RelRoot.of( optimize( routed, resultConvention ), SqlKind.SELECT );*/
+                //PreparedResult prep = implement( routed, routed.rel.getRowType() );
+                //PolyphenyDbSignature<?> signature = prepareQuery( filter, filter.rel.getRowType(), isRouted, isSubquery );
+                ProposedImplementations implementations = prepareQueryList( updated, updated.alg.getRowType(), isRouted, isSubQuery );
+                System.out.println( implementations.results.get( 0 ).getRows( statement, -1 ) );
+                indexLookupRoot.alg.replaceInput( 0, LogicalProvider.create( (Filter) filter.alg, implementations.results.get( 0 ), statement ) );
             }
 
             //

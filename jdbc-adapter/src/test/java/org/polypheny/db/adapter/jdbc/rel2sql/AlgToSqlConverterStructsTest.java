@@ -66,7 +66,7 @@ import org.polypheny.db.util.ImmutableBitSet;
 /**
  * Tests for {@link AlgToSqlConverter} on a schema that has nested structures of multiple levels.
  */
-public class RelToSqlConverterStructsTest extends SqlLanguagelDependant {
+public class AlgToSqlConverterStructsTest extends SqlLanguagelDependant {
 
     private static final Schema SCHEMA = new Schema() {
         @Override

@@ -51,9 +51,9 @@ import spark.Service;
 public class HttpInterface extends QueryInterface {
 
     @SuppressWarnings("WeakerAccess")
-    public static final String INTERFACE_NAME = "MongoQL Interface";
+    public static final String INTERFACE_NAME = "HTTP Interface";
     @SuppressWarnings("WeakerAccess")
-    public static final String INTERFACE_DESCRIPTION = "MongoQL-based query interface.";
+    public static final String INTERFACE_DESCRIPTION = "HTTP-based query interface, which supports all available languages via specific routes.";
     @SuppressWarnings("WeakerAccess")
     public static final List<QueryInterfaceSetting> AVAILABLE_SETTINGS = ImmutableList.of(
             new QueryInterfaceSettingInteger( "port", false, true, false, 1337 ),
@@ -73,7 +73,7 @@ public class HttpInterface extends QueryInterface {
 
     private final MonitoringPage monitoringPage;
 
-    private Service restServer;
+    private Service server;
 
 
     public HttpInterface( TransactionManager transactionManager, Authenticator authenticator, int ifaceId, String uniqueName, Map<String, String> settings ) {
@@ -91,18 +91,19 @@ public class HttpInterface extends QueryInterface {
 
     @Override
     public void run() {
-        restServer = Service.ignite();
-        restServer.port( port );
+        server = Service.ignite();
+        server.webSocketIdleTimeoutMillis( 9999999 );
+        server.port( port );
 
-        restServer.post( "/mongo", ( req, res ) -> anyQuery( QueryLanguage.MONGO_QL, req, res ) );
-        restServer.post( "/mql", ( req, res ) -> anyQuery( QueryLanguage.MONGO_QL, req, res ) );
+        server.post( "/mongo", ( req, res ) -> anyQuery( QueryLanguage.MONGO_QL, req, res ) );
+        server.post( "/mql", ( req, res ) -> anyQuery( QueryLanguage.MONGO_QL, req, res ) );
 
-        restServer.post( "/sql", ( req, res ) -> anyQuery( QueryLanguage.SQL, req, res ) );
+        server.post( "/sql", ( req, res ) -> anyQuery( QueryLanguage.SQL, req, res ) );
 
-        restServer.post( "/piglet", ( req, res ) -> anyQuery( QueryLanguage.PIG, req, res ) );
-        restServer.post( "/pig", ( req, res ) -> anyQuery( QueryLanguage.PIG, req, res ) );
+        server.post( "/piglet", ( req, res ) -> anyQuery( QueryLanguage.PIG, req, res ) );
+        server.post( "/pig", ( req, res ) -> anyQuery( QueryLanguage.PIG, req, res ) );
 
-        restServer.post( "/cql", ( req, res ) -> anyQuery( QueryLanguage.CQL, req, res ) );
+        server.post( "/cql", ( req, res ) -> anyQuery( QueryLanguage.CQL, req, res ) );
         log.info( "{} started and is listening on port {}.", INTERFACE_NAME, port );
     }
 
@@ -129,7 +130,7 @@ public class HttpInterface extends QueryInterface {
 
     @Override
     public void shutdown() {
-        restServer.stop();
+        server.stop();
     }
 
 
