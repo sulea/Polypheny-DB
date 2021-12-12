@@ -60,17 +60,17 @@ import org.polypheny.db.algebra.constant.ExplainLevel;
 import org.polypheny.db.algebra.constant.Kind;
 import org.polypheny.db.algebra.core.ConditionalExecute;
 import org.polypheny.db.algebra.core.ConditionalExecute.Condition;
-import org.polypheny.db.algebra.core.Filter;
 import org.polypheny.db.algebra.core.Project;
 import org.polypheny.db.algebra.core.Sort;
+import org.polypheny.db.algebra.core.TableModify.Operation;
 import org.polypheny.db.algebra.core.Values;
 import org.polypheny.db.algebra.logical.LogicalConditionalExecute;
 import org.polypheny.db.algebra.logical.LogicalFilter;
 import org.polypheny.db.algebra.logical.LogicalProject;
-import org.polypheny.db.algebra.logical.LogicalProvider;
 import org.polypheny.db.algebra.logical.LogicalTableModify;
 import org.polypheny.db.algebra.logical.LogicalTableScan;
 import org.polypheny.db.algebra.logical.LogicalValues;
+import org.polypheny.db.algebra.operators.OperatorName;
 import org.polypheny.db.algebra.type.AlgDataType;
 import org.polypheny.db.algebra.type.AlgDataTypeField;
 import org.polypheny.db.catalog.Catalog;
@@ -89,6 +89,7 @@ import org.polypheny.db.information.InformationPage;
 import org.polypheny.db.information.InformationQueryPlan;
 import org.polypheny.db.interpreter.BindableConvention;
 import org.polypheny.db.interpreter.Interpreters;
+import org.polypheny.db.languages.OperatorRegistry;
 import org.polypheny.db.monitoring.core.MonitoringServiceProvider;
 import org.polypheny.db.monitoring.events.DmlEvent;
 import org.polypheny.db.monitoring.events.QueryEvent;
@@ -255,6 +256,7 @@ public abstract class AbstractQueryProcessor implements QueryProcessor, Executio
         List<AlgRoot> parameterizedRootList = new ArrayList<>();
         List<PolyResult> results = new ArrayList<>();
         List<String> generatedCodes = new ArrayList<>();
+        List<AlgRoot> updates = new ArrayList<>();
 
         //
         // Check for view
@@ -369,7 +371,8 @@ public abstract class AbstractQueryProcessor implements QueryProcessor, Executio
             // atm all filter are removed, even if the adapter could be capable of handling it itself,
             // for the future to prevent this the routed node could be checked and only substituted if it
             // is of another type then the adapter
-            if ( indexLookupRoot.alg instanceof LogicalTableModify && ((LogicalTableModify) indexLookupRoot.alg).getInput() instanceof LogicalFilter ) {
+            if ( indexLookupRoot.alg instanceof LogicalTableModify
+                    && ((LogicalTableModify) indexLookupRoot.alg).getInput() instanceof LogicalFilter && !isSubQuery ) {
                 LogicalTableModify modify = ((LogicalTableModify) indexLookupRoot.alg);
                 AlgRoot filter = AlgRoot.of( modify.getInput(), Kind.SELECT );
 
@@ -384,19 +387,48 @@ public abstract class AbstractQueryProcessor implements QueryProcessor, Executio
                 Project project = LogicalProject.create( modify.getInput(), source, update );
                 AlgRoot updated = AlgRoot.of( project, Kind.SELECT );
 
-                /*RelRoot routed = route( filter, statement, executionTimeMonitor );
-                RelStructuredTypeFlattener typeFlattener = new RelStructuredTypeFlattener(
-                        RelBuilder.create( statement, routed.rel.getCluster() ),
-                        routed.rel.getCluster().getRexBuilder(),
-                        ViewExpanders.toRelContext( this, routed.rel.getCluster() ),
-                        true );
-                routed = routed.withRel( typeFlattener.rewrite( routed.rel ) );
-                routed = RelRoot.of( optimize( routed, resultConvention ), SqlKind.SELECT );*/
-                //PreparedResult prep = implement( routed, routed.rel.getRowType() );
-                //PolyphenyDbSignature<?> signature = prepareQuery( filter, filter.rel.getRowType(), isRouted, isSubquery );
                 ProposedImplementations implementations = prepareQueryList( updated, updated.alg.getRowType(), isRouted, isSubQuery );
-                System.out.println( implementations.results.get( 0 ).getRows( statement, -1 ) );
-                indexLookupRoot.alg.replaceInput( 0, LogicalProvider.create( (Filter) filter.alg, implementations.results.get( 0 ), statement ) );
+                //indexLookupRoot.alg.replaceInput( 0, LogicalProvider.create( (Filter) filter.alg, implementations.results.get( 0 ), statement ) );
+                PolyResult result = implementations.getResults().get( 0 );
+                List<List<Object>> rows = result.getRows( statement, -1 );
+                for ( List<Object> row : rows ) {
+                    assert row.size() == 3;
+                    AlgBuilder builder = AlgBuilder.create( statement );
+                    // push TableScan
+                    builder.scan( modify.getTable().getQualifiedName() );
+                    builder = builder.filter(
+                            builder.getRexBuilder().makeCall(
+                                    OperatorRegistry.get( OperatorName.EQUALS ),
+                                    builder.getRexBuilder().makeLiteral(
+                                            row.get( 0 ),
+                                            updated.validatedRowType.getFieldList().get( 0 ).getType(),
+                                            true ),
+                                    builder.getRexBuilder().makeInputRef( updated.validatedRowType, 0 ) ) );
+
+                    AlgDataType type = updated.validatedRowType.getFieldList().get( 1 ).getType();
+
+                    updates.add( AlgRoot.of( LogicalTableModify.create(
+                            modify.getTable(),
+                            modify.getCatalogReader(),
+                            builder.build(),
+                            Operation.UPDATE,
+                            Collections.singletonList( updated.validatedRowType.getFieldNames().get( 1 ) ),
+                            Collections.singletonList(
+                                    row.get( 2 ) instanceof String
+                                            ? builder.getRexBuilder().makeLiteral( (String) row.get( 2 ) )
+                                            : builder.getRexBuilder().makeLiteral(
+                                                    row.get( 2 ),
+                                                    type, true ) ),
+                            false ), Kind.UPDATE ) );
+                }
+
+                for ( AlgRoot algRoot : updates ) {
+                    prepareQuery( algRoot, algRoot.validatedRowType, false, true, false ).getRows( statement, -1 );
+                }
+                AlgBuilder builder = AlgBuilder.create( statement );
+
+                indexLookupRoot = AlgRoot.of(
+                        builder.scan( indexLookupRoot.alg.getTable().getQualifiedName() ).aggregate( builder.groupKey(), builder.countStar( "ROWCOUNT" ) ).build(), Kind.SELECT );
             }
 
             //

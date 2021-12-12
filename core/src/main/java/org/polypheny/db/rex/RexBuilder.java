@@ -1213,6 +1213,7 @@ public class RexBuilder {
         switch ( type.getPolyType() ) {
             case CHAR:
                 return makeCharLiteral( padRight( (NlsString) value, type.getPrecision() ) );
+            case JSON: // todo dl maybe change
             case VARCHAR:
                 literal = makeCharLiteral( (NlsString) value );
                 if ( allowCast ) {

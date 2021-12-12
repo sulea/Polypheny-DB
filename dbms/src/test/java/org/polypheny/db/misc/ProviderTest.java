@@ -25,12 +25,15 @@ import java.sql.Statement;
 import java.util.Arrays;
 import org.junit.Ignore;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
+import org.polypheny.db.AdapterTestSuite;
 import org.polypheny.db.TestHelper;
 import org.polypheny.db.TestHelper.JdbcConnection;
 import org.polypheny.db.TestHelper.MongoConnection;
 import org.polypheny.db.mql.MqlTestTemplate;
 import org.polypheny.db.webui.models.Result;
 
+@Category(AdapterTestSuite.class)
 public class ProviderTest extends MqlTestTemplate {
     @Test
     public void ddlEnumerableTest() {
@@ -67,8 +70,22 @@ public class ProviderTest extends MqlTestTemplate {
     @Test
     public void ddlEnumerableTestFilter() {
         insert( "{\"hi\":3,\"stock\":3}" );
+        insert( "{\"hi\":3,\"stock\":32}" );
+        insert( "{\"hi\":5,\"stock\":3}" );
 
-        find( "{\"hi\":3}", "{}" );
+        MongoConnection.executeGetResponse(
+                "db.test.update({ \"hi\": 3 },{\"$inc\": {\"stock\": -3}})"
+        );
+        Result res = find( "{}", "{}" );
+        System.out.println( Arrays.deepToString( res.getData() ) );
+
+        assertTrue(
+                MongoConnection.checkUnorderedResultSet( res,
+                        ImmutableList.of(
+                                new String[]{ "id_", "{\"hi\":3,\"stock\":0}" },
+                                new String[]{ "id_", "{\"hi\":3,\"stock\":29}" },
+                                new String[]{ "id_", "{\"hi\":5,\"stock\":3}" }
+                        ), true ) );
 
     }
 
@@ -111,6 +128,28 @@ public class ProviderTest extends MqlTestTemplate {
                 statement.executeUpdate( "INSERT INTO emps VALUES (1,1,'foo'), (2,5,'bar'), (3,7,'foobar')" );
 
                 statement.executeQuery( "UPDATE \"emps\" SET \"tprimary\" = \"tprimary\" + 8 WHERE \"tprimary\" = 1" );
+
+                connection.commit();
+
+            }
+        }
+    }
+
+    @Ignore
+    @Test
+    public void ddlSqlCountTest() throws SQLException {
+        TestHelper.getInstance();
+        try ( JdbcConnection polyphenyDbConnection = new JdbcConnection( true ) ) {
+            Connection connection = polyphenyDbConnection.getConnection();
+            try ( Statement statement = connection.createStatement() ) {
+                statement.executeUpdate( "CREATE TABLE emps( "
+                        + "tprimary INTEGER NOT NULL, "
+                        + "tinteger INTEGER NULL, "
+                        + "tvarchar VARCHAR(20) NULL, "
+                        + "PRIMARY KEY (tprimary) )" );
+                statement.executeUpdate( "INSERT INTO emps VALUES (1,1,'foo'), (2,5,'bar'), (3,7,'foobar')" );
+
+                statement.executeQuery( "SELECT COUNT(*) FROM emps WHERE \"tprimary\" = 1" );
 
                 connection.commit();
 

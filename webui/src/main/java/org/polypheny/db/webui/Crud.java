@@ -2922,7 +2922,7 @@ public class Crud implements InformationObserver {
             return new Result( e );
         }
 
-        // Wrap {@link AlgNode} into a RelRoot
+        // Wrap {@link AlgNode} into a AlgRoot
         final AlgDataType rowType = result.getRowType();
         final List<Pair<Integer, String>> fields = Pair.zip( ImmutableIntList.identity( rowType.getFieldCount() ), rowType.getFieldNames() );
         final AlgCollation collation =

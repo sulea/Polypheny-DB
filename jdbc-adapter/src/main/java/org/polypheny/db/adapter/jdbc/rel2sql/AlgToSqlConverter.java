@@ -83,7 +83,6 @@ import org.polypheny.db.rex.RexLocalRef;
 import org.polypheny.db.rex.RexNode;
 import org.polypheny.db.rex.RexProgram;
 import org.polypheny.db.sql.sql.SqlCall;
-import org.polypheny.db.sql.sql.SqlCollation;
 import org.polypheny.db.sql.sql.SqlDelete;
 import org.polypheny.db.sql.sql.SqlDialect;
 import org.polypheny.db.sql.sql.SqlIdentifier;
@@ -100,7 +99,6 @@ import org.polypheny.db.sql.sql.SqlUpdate;
 import org.polypheny.db.sql.sql.fun.SqlRowOperator;
 import org.polypheny.db.sql.sql.fun.SqlSingleValueAggFunction;
 import org.polypheny.db.sql.sql.validate.SqlValidatorUtil;
-import org.polypheny.db.util.NlsString;
 import org.polypheny.db.util.Pair;
 import org.polypheny.db.util.ReflectUtil;
 import org.polypheny.db.util.ReflectiveVisitor;
@@ -498,20 +496,32 @@ public abstract class AlgToSqlConverter extends SqlImplementor implements Reflec
                 return result( sqlInsert, ImmutableList.of(), modify, null );
             }
             case UPDATE: {
-                if ( modify.getInput() instanceof Provider ) {
+                /*if ( modify.getInput() instanceof Provider ) {
                     ((Provider) modify.getInput()).setTable( modify.getTable() );
-                }
+                    final Result input = visitChild( 0, modify.getInput() );
+
+                    final SqlUpdate sqlUpdate = new SqlUpdate(
+                            POS,
+                            sqlTargetTable,
+                            physicalIdentifierList( modify.getTable().getQualifiedName(), modify.getUpdateColumnList() ),
+                            exprList( context, ((Provider) modify.getInput()).getUpdatedValue() ),
+                            ((SqlSelect) input.node).getWhere(),
+                            input.asSelect(),
+                            null );
+                    return result( new SqlNodeList(  )sqlUpdate, input.clauses, modify, null );
+                }else {*/
                 final Result input = visitChild( 0, modify.getInput() );
-                RexNode val = modify.getCluster().getRexBuilder().makeCharLiteral( new NlsString( "{\"test\":\"great success\"}", null, SqlCollation.IMPLICIT ) );
+
                 final SqlUpdate sqlUpdate = new SqlUpdate(
                         POS,
                         sqlTargetTable,
                         physicalIdentifierList( modify.getTable().getQualifiedName(), modify.getUpdateColumnList() ),
-                        exprList( context, modify.getInput() instanceof Provider ? ((Provider) modify.getInput()).getUpdatedValue() : modify.getSourceExpressionList() ),
+                        exprList( context, modify.getSourceExpressionList() ),
                         ((SqlSelect) input.node).getWhere(),
                         input.asSelect(),
                         null );
                 return result( sqlUpdate, input.clauses, modify, null );
+                //}
             }
             case DELETE: {
                 final Result input = visitChild( 0, modify.getInput() );
