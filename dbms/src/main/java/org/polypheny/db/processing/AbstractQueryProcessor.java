@@ -245,6 +245,7 @@ public abstract class AbstractQueryProcessor implements QueryProcessor, Executio
     private ProposedImplementations prepareQueryList( AlgRoot logicalRoot, AlgDataType parameterRowType, boolean isRouted, boolean isSubQuery ) {
         boolean isAnalyze = statement.getTransaction().isAnalyze() && !isSubQuery;
         boolean lock = !isSubQuery;
+
         SchemaType schemaType = null;
 
         final Convention resultConvention = ENABLE_BINDABLE ? BindableConvention.INSTANCE : EnumerableConvention.INSTANCE;
@@ -390,7 +391,7 @@ public abstract class AbstractQueryProcessor implements QueryProcessor, Executio
             // is of another type then the adapter
             if ( proposedRoutingPlans.get( 0 ).getRoutedRoot().alg instanceof LogicalTableModify
                     && ((LogicalTableModify) indexLookupRoot.alg).getInput() instanceof LogicalFilter
-                    && !isSubQuery && optimize( proposedRoutingPlans.get( 0 ).getRoutedRoot(), resultConvention ) instanceof EnumerableTableModify ) {
+                    && optimize( proposedRoutingPlans.get( 0 ).getRoutedRoot(), resultConvention ) instanceof EnumerableTableModify ) {
                 LogicalTableModify modify = ((LogicalTableModify) indexLookupRoot.alg);
                 AlgRoot filter = AlgRoot.of( modify.getInput(), Kind.SELECT );
 
@@ -406,7 +407,7 @@ public abstract class AbstractQueryProcessor implements QueryProcessor, Executio
                 AlgRoot updated = AlgRoot.of( project, Kind.SELECT );
 
                 ProposedImplementations implementations = prepareQueryList( updated, updated.alg.getRowType(), isRouted, isSubQuery );
-                //indexLookupRoot.alg.replaceInput( 0, LogicalProvider.create( (Filter) filter.alg, implementations.results.get( 0 ), statement ) );
+
                 PolyResult result = implementations.getResults().get( 0 );
                 List<List<Object>> rows = result.getRows( statement, -1 );
                 for ( List<Object> row : rows ) {

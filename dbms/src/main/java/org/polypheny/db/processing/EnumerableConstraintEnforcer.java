@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.NotImplementedException;
 import org.polypheny.db.algebra.AlgNode;
@@ -81,6 +82,7 @@ import org.polypheny.db.transaction.Statement;
 @Slf4j
 public class EnumerableConstraintEnforcer implements ConstraintEnforcer {
 
+    @SneakyThrows // todo dl remove
     @Override
     public AlgRoot enforce( AlgRoot logicalRoot, Statement statement ) {
         if ( !logicalRoot.kind.belongsTo( Kind.DML ) ) {
@@ -92,7 +94,8 @@ public class EnumerableConstraintEnforcer implements ConstraintEnforcer {
         final TableModify root = (TableModify) logicalRoot.alg;
 
         final Catalog catalog = Catalog.getInstance();
-        final CatalogSchema schema = statement.getTransaction().getDefaultSchema();
+        assert root.getTable().getQualifiedName().size() == 2;
+        final CatalogSchema schema = catalog.getSchema( Catalog.defaultDatabaseId, root.getTable().getQualifiedName().get( 0 ) );
         final CatalogTable table;
         final CatalogPrimaryKey primaryKey;
         final List<CatalogConstraint> constraints;
@@ -144,24 +147,26 @@ public class EnumerableConstraintEnforcer implements ConstraintEnforcer {
                 //
                 // TODO: Here we get issues with batch queries
                 //
-                builder.push( input );
-                builder.project( constraint.key.getColumnNames().stream().map( builder::field ).collect( Collectors.toList() ) );
+                //builder.push( input );
+                //builder.project( constraint.key.getColumnNames().stream().map( builder::field ).collect( Collectors.toList() ) );
                 builder.push( scan );
                 builder.project( constraint.key.getColumnNames().stream().map( builder::field ).collect( Collectors.toList() ) );
                 for ( final String column : constraint.key.getColumnNames() ) {
                     RexNode joinComparison = rexBuilder.makeCall(
                             OperatorRegistry.get( OperatorName.EQUALS ),
-                            builder.field( 2, 1, column ),
-                            builder.field( 2, 0, column )
+                            ((Values) input).getTuples().get( 0 ).get( 0 ),
+                            builder.field( 1, 0, column )
                     );
                     joinCondition = rexBuilder.makeCall( OperatorRegistry.get( OperatorName.AND ), joinCondition, joinComparison );
                 }
+                builder.filter(joinCondition);
                 //
                 // TODO MV: Changed JOIN Type from LEFT to INNER to fix issues row types in index based query simplification.
                 //  Make sure this is ok!
                 //
-                final AlgNode join = builder.join( JoinAlgType.INNER, joinCondition ).build();
-                final AlgNode check = LogicalFilter.create( join, rexBuilder.makeCall( OperatorRegistry.get( OperatorName.IS_NOT_NULL ), rexBuilder.makeInputRef( join, join.getRowType().getFieldCount() - 1 ) ) );
+                //final AlgNode join = builder.join( JoinAlgType.INNER, joinCondition ).build();
+                AlgNode filter = builder.build();
+                final AlgNode check = LogicalFilter.create( filter, rexBuilder.makeCall( OperatorRegistry.get( OperatorName.IS_NOT_NULL ), rexBuilder.makeInputRef( filter, filter.getRowType().getFieldCount() - 1 ) ) );
                 final LogicalConditionalExecute lce = LogicalConditionalExecute.create( check, lceRoot, Condition.EQUAL_TO_ZERO,
                         ConstraintViolationException.class,
                         String.format( "Insert violates unique constraint `%s`.`%s`", table.name, constraint.name ) );
