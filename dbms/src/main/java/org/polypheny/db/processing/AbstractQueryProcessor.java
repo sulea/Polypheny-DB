@@ -46,6 +46,7 @@ import org.polypheny.db.adapter.enumerable.EnumerableAlg.Prefer;
 import org.polypheny.db.adapter.enumerable.EnumerableCalc;
 import org.polypheny.db.adapter.enumerable.EnumerableConvention;
 import org.polypheny.db.adapter.enumerable.EnumerableInterpretable;
+import org.polypheny.db.adapter.enumerable.EnumerableTableModify;
 import org.polypheny.db.adapter.index.Index;
 import org.polypheny.db.adapter.index.IndexManager;
 import org.polypheny.db.algebra.AlgCollation;
@@ -368,11 +369,28 @@ public abstract class AbstractQueryProcessor implements QueryProcessor, Executio
                 statement.getProcessingDuration().start( "Routing" );
             }
 
+            //
+            // Routing
+            if ( RuntimeConfig.ROUTING_PLAN_CACHING.getBoolean() && !indexLookupRoot.kind.belongsTo( Kind.DML ) ) {
+                Set<Long> partitionIds = logicalQueryInformation.getAccessedPartitions().values().stream()
+                        .flatMap( List::stream )
+                        .collect( Collectors.toSet() );
+                List<CachedProposedRoutingPlan> routingPlansCached = RoutingPlanCache.INSTANCE.getIfPresent( logicalQueryInformation.getQueryClass(), partitionIds );
+                if ( !routingPlansCached.isEmpty() ) {
+                    proposedRoutingPlans = routeCached( indexLookupRoot, routingPlansCached, statement, logicalQueryInformation, isAnalyze );
+                }
+            }
+
+            if ( proposedRoutingPlans == null ) {
+                proposedRoutingPlans = route( indexLookupRoot, statement, logicalQueryInformation );
+            }
+
             // atm all filter are removed, even if the adapter could be capable of handling it itself,
             // for the future to prevent this the routed node could be checked and only substituted if it
             // is of another type then the adapter
-            if ( indexLookupRoot.alg instanceof LogicalTableModify
-                    && ((LogicalTableModify) indexLookupRoot.alg).getInput() instanceof LogicalFilter && !isSubQuery ) {
+            if ( proposedRoutingPlans.get( 0 ).getRoutedRoot().alg instanceof LogicalTableModify
+                    && ((LogicalTableModify) indexLookupRoot.alg).getInput() instanceof LogicalFilter
+                    && !isSubQuery && optimize( proposedRoutingPlans.get( 0 ).getRoutedRoot(), resultConvention ) instanceof EnumerableTableModify ) {
                 LogicalTableModify modify = ((LogicalTableModify) indexLookupRoot.alg);
                 AlgRoot filter = AlgRoot.of( modify.getInput(), Kind.SELECT );
 
@@ -427,24 +445,10 @@ public abstract class AbstractQueryProcessor implements QueryProcessor, Executio
                 }
                 AlgBuilder builder = AlgBuilder.create( statement );
 
-                indexLookupRoot = AlgRoot.of(
+                AlgRoot newRoot = AlgRoot.of(
                         builder.scan( indexLookupRoot.alg.getTable().getQualifiedName() ).aggregate( builder.groupKey(), builder.countStar( "ROWCOUNT" ) ).build(), Kind.SELECT );
-            }
 
-            //
-            // Routing
-            if ( RuntimeConfig.ROUTING_PLAN_CACHING.getBoolean() && !indexLookupRoot.kind.belongsTo( Kind.DML ) ) {
-                Set<Long> partitionIds = logicalQueryInformation.getAccessedPartitions().values().stream()
-                        .flatMap( List::stream )
-                        .collect( Collectors.toSet() );
-                List<CachedProposedRoutingPlan> routingPlansCached = RoutingPlanCache.INSTANCE.getIfPresent( logicalQueryInformation.getQueryClass(), partitionIds );
-                if ( !routingPlansCached.isEmpty() ) {
-                    proposedRoutingPlans = routeCached( indexLookupRoot, routingPlansCached, statement, logicalQueryInformation, isAnalyze );
-                }
-            }
-
-            if ( proposedRoutingPlans == null ) {
-                proposedRoutingPlans = route( indexLookupRoot, statement, logicalQueryInformation );
+                proposedRoutingPlans = route( newRoot, statement, logicalQueryInformation );
             }
 
             if ( isAnalyze ) {

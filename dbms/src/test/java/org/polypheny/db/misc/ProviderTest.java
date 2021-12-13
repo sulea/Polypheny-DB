@@ -90,7 +90,6 @@ public class ProviderTest extends MqlTestTemplate {
     }
 
 
-    @Ignore
     @Test
     public void ddlNormalTest() throws SQLException {
         TestHelper.getInstance();
@@ -106,6 +105,8 @@ public class ProviderTest extends MqlTestTemplate {
 
                 statement.executeQuery( "SELECT \"tprimary\" FROM \"public\".\"emps\"" );
 
+                statement.executeUpdate( "DROP TABLE emps" );
+
                 connection.commit();
 
             }
@@ -113,7 +114,6 @@ public class ProviderTest extends MqlTestTemplate {
     }
 
 
-    @Ignore
     @Test
     public void ddlSqlUpdateTest() throws SQLException {
         TestHelper.getInstance();
@@ -127,7 +127,9 @@ public class ProviderTest extends MqlTestTemplate {
                         + "PRIMARY KEY (tprimary) )" );
                 statement.executeUpdate( "INSERT INTO emps VALUES (1,1,'foo'), (2,5,'bar'), (3,7,'foobar')" );
 
-                statement.executeQuery( "UPDATE \"emps\" SET \"tprimary\" = \"tprimary\" + 8 WHERE \"tprimary\" = 1" );
+                statement.executeUpdate( "UPDATE \"emps\" SET \"tprimary\" = \"tprimary\" + 8 WHERE \"tprimary\" = 1" );
+
+                statement.executeUpdate( "DROP TABLE emps" );
 
                 connection.commit();
 
@@ -135,7 +137,6 @@ public class ProviderTest extends MqlTestTemplate {
         }
     }
 
-    @Ignore
     @Test
     public void ddlSqlCountTest() throws SQLException {
         TestHelper.getInstance();
@@ -150,6 +151,8 @@ public class ProviderTest extends MqlTestTemplate {
                 statement.executeUpdate( "INSERT INTO emps VALUES (1,1,'foo'), (2,5,'bar'), (3,7,'foobar')" );
 
                 statement.executeQuery( "SELECT COUNT(*) FROM emps WHERE \"tprimary\" = 1" );
+
+                statement.executeUpdate( "DROP TABLE emps" );
 
                 connection.commit();
 
