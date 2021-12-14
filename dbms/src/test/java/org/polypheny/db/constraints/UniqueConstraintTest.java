@@ -38,7 +38,6 @@ import org.polypheny.db.TestHelper.JdbcConnection;
 
 @SuppressWarnings({ "SqlDialectInspection", "SqlNoDataSourceInspection" })
 @Slf4j
-@Ignore
 @RunWith(Parameterized.class)
 public class UniqueConstraintTest {
 
@@ -329,6 +328,7 @@ public class UniqueConstraintTest {
 
 
     @Test
+    @Ignore
     public void batchInsertTest() throws SQLException {
         try ( JdbcConnection polyphenyDbConnection = new JdbcConnection( true ) ) {
             Connection connection = polyphenyDbConnection.getConnection();
@@ -409,6 +409,7 @@ public class UniqueConstraintTest {
 
 
     @Test
+    @Ignore
     public void batchUpdateTest() throws SQLException {
         try ( JdbcConnection polyphenyDbConnection = new JdbcConnection( true ) ) {
             Connection connection = polyphenyDbConnection.getConnection();
@@ -484,6 +485,8 @@ public class UniqueConstraintTest {
     }
 
 
+    @Ignore // fails as it selects all values existing and the new value calculated
+    // this leads for example with 1,2,3 and op + 1 to crossover as 1 -> 2
     @Test
     public void updateNoConflictTest() throws SQLException {
         try ( JdbcConnection polyphenyDbConnection = new JdbcConnection( true ) ) {

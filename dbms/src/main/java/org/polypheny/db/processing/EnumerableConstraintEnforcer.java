@@ -16,6 +16,7 @@
 
 package org.polypheny.db.processing;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -25,6 +26,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import lombok.SneakyThrows;
@@ -74,6 +76,7 @@ import org.polypheny.db.rex.RexLiteral;
 import org.polypheny.db.rex.RexNode;
 import org.polypheny.db.rex.RexShuttle;
 import org.polypheny.db.rex.RexUtil;
+import org.polypheny.db.schema.LogicalTable;
 import org.polypheny.db.sql.sql.fun.SqlCountAggFunction;
 import org.polypheny.db.tools.AlgBuilder;
 import org.polypheny.db.transaction.Statement;
@@ -81,6 +84,10 @@ import org.polypheny.db.transaction.Statement;
 
 @Slf4j
 public class EnumerableConstraintEnforcer implements ConstraintEnforcer {
+
+
+    private final static AtomicInteger id = new AtomicInteger();
+
 
     @SneakyThrows // todo dl remove
     @Override
@@ -94,8 +101,17 @@ public class EnumerableConstraintEnforcer implements ConstraintEnforcer {
         final TableModify root = (TableModify) logicalRoot.alg;
 
         final Catalog catalog = Catalog.getInstance();
-        assert root.getTable().getQualifiedName().size() == 2;
-        final CatalogSchema schema = catalog.getSchema( Catalog.defaultDatabaseId, root.getTable().getQualifiedName().get( 0 ) );
+        String schemaName;
+        if ( root.getTable().getTable() instanceof LogicalTable ) {
+            schemaName = ((LogicalTable) root.getTable().getTable()).getLogicalSchemaName();
+        } else if ( root.getTable().getQualifiedName().size() == 2 ) {
+            schemaName = root.getTable().getQualifiedName().get( 0 );
+        } else if ( root.getTable().getQualifiedName().size() == 3 ) {
+            schemaName = root.getTable().getQualifiedName().get( 1 );
+        } else {
+            throw new RuntimeException( "The schema name was not provided correctly!" );
+        }
+        final CatalogSchema schema = catalog.getSchema( Catalog.defaultDatabaseId, schemaName );
         final CatalogTable table;
         final CatalogPrimaryKey primaryKey;
         final List<CatalogConstraint> constraints;
@@ -149,24 +165,60 @@ public class EnumerableConstraintEnforcer implements ConstraintEnforcer {
                 //
                 //builder.push( input );
                 //builder.project( constraint.key.getColumnNames().stream().map( builder::field ).collect( Collectors.toList() ) );
-                builder.push( scan );
-                builder.project( constraint.key.getColumnNames().stream().map( builder::field ).collect( Collectors.toList() ) );
-                for ( final String column : constraint.key.getColumnNames() ) {
-                    RexNode joinComparison = rexBuilder.makeCall(
-                            OperatorRegistry.get( OperatorName.EQUALS ),
-                            ((Values) input).getTuples().get( 0 ).get( 0 ),
-                            builder.field( 1, 0, column )
-                    );
-                    joinCondition = rexBuilder.makeCall( OperatorRegistry.get( OperatorName.AND ), joinCondition, joinComparison );
+
+                if ( input instanceof Values ) {
+                    builder.push( scan );
+                    builder.project( constraint.key.getColumnNames().stream().map( builder::field ).collect( Collectors.toList() ) );
+                    Values vals = (Values) input;
+                    List<RexNode> ors = new ArrayList<>();
+                    for ( ImmutableList<RexLiteral> tuple : vals.getTuples() ) {
+                        for ( final String column : constraint.key.getColumnNames() ) {
+                            // we compare the value of the condition with the specified key of the TableScan to ensure the constraint
+                            RexInputRef fromScan = builder.field( 1, 0, column );
+                            RexNode joinComparison = rexBuilder.makeCall(
+                                    OperatorRegistry.get( OperatorName.EQUALS ),
+                                    tuple.get( fromScan.getIndex() ),
+                                    //vals.getTuples().size() != 1 ? new RexHolder( vals, fromScan.getIndex() ) : vals.getTuples().get( 0 ).get( 0 ),
+                                    fromScan
+                            );
+                            ors.add( rexBuilder.makeCall( OperatorRegistry.get( OperatorName.AND ), joinCondition, joinComparison ) );
+                        }
+                    }
+                    // if we have a batched insert we test every combination against the TableScan at once
+                    // this requires one bigger test and concludes to false if one already exists,
+                    // which would lead to a rollback
+                    if ( ors.size() > 1 ) {
+                        builder.filter( rexBuilder.makeCall( OperatorRegistry.get( OperatorName.OR ), ors ) );
+                    } else {
+                        builder.filter( ors.get( 0 ) );
+                    }
+                } else {
+                    builder.push( input );
+                    builder.project( constraint.key.getColumnNames().stream().map( builder::field ).collect( Collectors.toList() ) );
+                    builder.push( scan );
+                    builder.project( constraint.key.getColumnNames().stream().map( builder::field ).collect( Collectors.toList() ) );
+                    for ( final String column : constraint.key.getColumnNames() ) {
+                        RexNode joinComparison = rexBuilder.makeCall(
+                                OperatorRegistry.get( OperatorName.EQUALS ),
+                                builder.field( 2, 1, column ),
+                                builder.field( 2, 0, column )
+                        );
+                        joinCondition = rexBuilder.makeCall( OperatorRegistry.get( OperatorName.AND ), joinCondition, joinComparison );
+                    }
+                    //
+                    // TODO MV: Changed JOIN Type from LEFT to INNER to fix issues row types in index based query simplification.
+                    //  Make sure this is ok!
+                    //
+                    builder.join( JoinAlgType.INNER, joinCondition );
                 }
-                builder.filter(joinCondition);
+
                 //
                 // TODO MV: Changed JOIN Type from LEFT to INNER to fix issues row types in index based query simplification.
                 //  Make sure this is ok!
                 //
                 //final AlgNode join = builder.join( JoinAlgType.INNER, joinCondition ).build();
-                AlgNode filter = builder.build();
-                final AlgNode check = LogicalFilter.create( filter, rexBuilder.makeCall( OperatorRegistry.get( OperatorName.IS_NOT_NULL ), rexBuilder.makeInputRef( filter, filter.getRowType().getFieldCount() - 1 ) ) );
+                AlgNode condition = builder.build();
+                final AlgNode check = LogicalFilter.create( condition, rexBuilder.makeCall( OperatorRegistry.get( OperatorName.IS_NOT_NULL ), rexBuilder.makeInputRef( condition, condition.getRowType().getFieldCount() - 1 ) ) );
                 final LogicalConditionalExecute lce = LogicalConditionalExecute.create( check, lceRoot, Condition.EQUAL_TO_ZERO,
                         ConstraintViolationException.class,
                         String.format( "Insert violates unique constraint `%s`.`%s`", table.name, constraint.name ) );
@@ -307,7 +359,10 @@ public class EnumerableConstraintEnforcer implements ConstraintEnforcer {
                 List<RexNode> projects = new ArrayList<>();
                 List<String> names = new ArrayList<>();
                 for ( final String column : primaryKey.getColumnNames() ) {
+                    // theoretically we should test if any of the resulting cols is conflicting
+                    // e.g. col * 1 should not be the same as any other col * 1 and not col
                     projects.add( builder.field( column ) );
+
                     names.add( column );
                 }
                 for ( final String column : constraint.key.getColumnNames() ) {
@@ -321,7 +376,7 @@ public class EnumerableConstraintEnforcer implements ConstraintEnforcer {
                     names.add( "$projected$." + column );
                 }
                 builder.project( projects );
-                builder.scan( table.name );
+                builder.scan( table.getSchemaName(), table.name );
                 builder.join( JoinAlgType.INNER, builder.literal( true ) );
 
                 List<RexNode> conditionList1 = primaryKey.getColumnNames().stream().map( c ->
@@ -357,8 +412,8 @@ public class EnumerableConstraintEnforcer implements ConstraintEnforcer {
                 AlgNode check = builder.build();
                 check = new LogicalFilter( check.getCluster(), check.getTraitSet(), check, condition, ImmutableSet.of() );
                 final LogicalConditionalExecute lce = LogicalConditionalExecute.create( check, lceRoot, Condition.EQUAL_TO_ZERO, ConstraintViolationException.class,
-                        String.format( "Update violates unique constraint `%s`.`%s`", table.name, constraint.name ) );
-                lce.setCheckDescription( String.format( "Enforcement of unique constraint `%s`.`%s`", table.name, constraint.name ) );
+                        String.format( "Update violates unique constraint `%s`.`%s` %d", table.name, constraint.name, EnumerableConstraintEnforcer.id.getAndIncrement() ) );
+                lce.setCheckDescription( String.format( "Enforcement of unique constraint `%s`.`%s`, %d", table.name, constraint.name, EnumerableConstraintEnforcer.id.get() - 1 ) );
                 lceRoot = lce;
                 // Enforce uniqueness within the values to insert
                 builder.clear();
@@ -531,5 +586,6 @@ public class EnumerableConstraintEnforcer implements ConstraintEnforcer {
         }
         return enforcementRoot;
     }
+
 
 }
