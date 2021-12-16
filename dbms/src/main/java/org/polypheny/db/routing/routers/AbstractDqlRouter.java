@@ -24,6 +24,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.polypheny.db.algebra.AlgNode;
 import org.polypheny.db.algebra.AlgRoot;
 import org.polypheny.db.algebra.core.ConditionalExecute;
+import org.polypheny.db.algebra.core.ConditionalTableModify;
 import org.polypheny.db.algebra.core.SetOp;
 import org.polypheny.db.algebra.logical.LogicalTableModify;
 import org.polypheny.db.algebra.logical.LogicalTableScan;
@@ -108,6 +109,8 @@ public abstract class AbstractDqlRouter extends BaseRouter implements Router {
             throw new IllegalStateException( "Should never happen for DML" );
         } else if ( logicalRoot.alg instanceof ConditionalExecute ) {
             throw new IllegalStateException( "Should never happen for conditional executes" );
+        } else if ( logicalRoot.alg instanceof ConditionalTableModify ) {
+            throw new IllegalStateException( "Should never happen for conditional table modifies" );
         } else {
             RoutedAlgBuilder builder = RoutedAlgBuilder.create( statement, logicalRoot.alg.getCluster() );
             List<RoutedAlgBuilder> routedAlgBuilders = buildDql(

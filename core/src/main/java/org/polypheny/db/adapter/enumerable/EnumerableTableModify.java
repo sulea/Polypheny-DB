@@ -80,6 +80,9 @@ public class EnumerableTableModify extends TableModify implements EnumerableAlg 
 
     @Override
     public Result implement( EnumerableAlgImplementor implementor, Prefer pref ) {
+        if ( getOperation() == Operation.UPDATE ) {
+            return implementUpdate( implementor, pref );
+        }
         final BlockBuilder builder = new BlockBuilder();
         final Result result = implementor.visitChild( this, 0, (EnumerableAlg) getInput(), pref );
         Expression childExp = builder.append( "child", result.block );
@@ -155,6 +158,11 @@ public class EnumerableTableModify extends TableModify implements EnumerableAlg 
                                 ? JavaRowFormat.ARRAY
                                 : JavaRowFormat.SCALAR );
         return implementor.result( physType, builder.toBlock() );
+    }
+
+
+    private Result implementUpdate( EnumerableAlgImplementor implementor, Prefer pref ) {
+        return null;
     }
 
 }

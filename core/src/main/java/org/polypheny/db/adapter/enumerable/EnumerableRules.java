@@ -68,6 +68,8 @@ public class EnumerableRules {
 
     public static final EnumerableConditionalExecuteFalseRule ENUMERABLE_CONDITIONAL_EXECUTE_FALSE_RULE = new EnumerableConditionalExecuteFalseRule();
 
+    public static final EnumerableConditionalTableModifyRule ENUMERABLE_CONDITIONAL_TABLE_MODIFY_RULE = new EnumerableConditionalTableModifyRule();
+
     public static final EnumerableProjectRule ENUMERABLE_PROJECT_RULE = new EnumerableProjectRule();
 
     public static final EnumerableFilterRule ENUMERABLE_FILTER_RULE = new EnumerableFilterRule();

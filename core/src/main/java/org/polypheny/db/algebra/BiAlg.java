@@ -35,6 +35,7 @@ package org.polypheny.db.algebra;
 
 
 import java.util.List;
+import lombok.Getter;
 import org.polypheny.db.plan.AlgOptCluster;
 import org.polypheny.db.plan.AlgTraitSet;
 import org.polypheny.db.runtime.FlatLists;
@@ -47,7 +48,9 @@ import org.polypheny.db.runtime.FlatLists;
  */
 public abstract class BiAlg extends AbstractAlgNode {
 
+    @Getter
     protected AlgNode left;
+    @Getter
     protected AlgNode right;
 
 
@@ -68,16 +71,6 @@ public abstract class BiAlg extends AbstractAlgNode {
     @Override
     public List<AlgNode> getInputs() {
         return FlatLists.of( left, right );
-    }
-
-
-    public AlgNode getLeft() {
-        return left;
-    }
-
-
-    public AlgNode getRight() {
-        return right;
     }
 
 

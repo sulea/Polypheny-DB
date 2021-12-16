@@ -35,6 +35,7 @@ import org.polypheny.db.algebra.constant.Kind;
 import org.polypheny.db.algebra.core.TableModify;
 import org.polypheny.db.algebra.core.TableModify.Operation;
 import org.polypheny.db.algebra.logical.LogicalConditionalExecute;
+import org.polypheny.db.algebra.logical.LogicalConditionalTableModify;
 import org.polypheny.db.algebra.logical.LogicalDocuments;
 import org.polypheny.db.algebra.logical.LogicalFilter;
 import org.polypheny.db.algebra.logical.LogicalModifyCollect;
@@ -712,6 +713,16 @@ public class DmlRouterImpl extends BaseRouter implements DmlRouter {
         }
 
         return LogicalConditionalExecute.create( builder.build(), action, lce );
+    }
+
+
+    @Override
+    public AlgNode handleConditionalTableModify( AlgNode alg, Statement statement, LogicalQueryInformation queryInformation ) {
+        LogicalConditionalTableModify lce = (LogicalConditionalTableModify) alg;
+        RoutedAlgBuilder builder = RoutedAlgBuilder.create( statement, alg.getCluster() );
+        builder = RoutingManager.getInstance().getFallbackRouter().routeFirst( lce.getQuery(), builder, statement, alg.getCluster(), queryInformation );
+
+        return LogicalConditionalTableModify.create( routeDml( lce.getModify(), statement ), builder.build(), routeDml( lce.getPrepared(), statement ) );
     }
 
 

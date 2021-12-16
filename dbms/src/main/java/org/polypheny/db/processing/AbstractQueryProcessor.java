@@ -46,7 +46,6 @@ import org.polypheny.db.adapter.enumerable.EnumerableAlg.Prefer;
 import org.polypheny.db.adapter.enumerable.EnumerableCalc;
 import org.polypheny.db.adapter.enumerable.EnumerableConvention;
 import org.polypheny.db.adapter.enumerable.EnumerableInterpretable;
-import org.polypheny.db.adapter.enumerable.EnumerableTableModify;
 import org.polypheny.db.adapter.index.Index;
 import org.polypheny.db.adapter.index.IndexManager;
 import org.polypheny.db.algebra.AlgCollation;
@@ -61,17 +60,15 @@ import org.polypheny.db.algebra.constant.ExplainLevel;
 import org.polypheny.db.algebra.constant.Kind;
 import org.polypheny.db.algebra.core.ConditionalExecute;
 import org.polypheny.db.algebra.core.ConditionalExecute.Condition;
-import org.polypheny.db.algebra.core.Project;
+import org.polypheny.db.algebra.core.ConditionalTableModify;
 import org.polypheny.db.algebra.core.Sort;
-import org.polypheny.db.algebra.core.TableModify.Operation;
+import org.polypheny.db.algebra.core.TableModify;
 import org.polypheny.db.algebra.core.Values;
 import org.polypheny.db.algebra.logical.LogicalConditionalExecute;
-import org.polypheny.db.algebra.logical.LogicalFilter;
 import org.polypheny.db.algebra.logical.LogicalProject;
 import org.polypheny.db.algebra.logical.LogicalTableModify;
 import org.polypheny.db.algebra.logical.LogicalTableScan;
 import org.polypheny.db.algebra.logical.LogicalValues;
-import org.polypheny.db.algebra.operators.OperatorName;
 import org.polypheny.db.algebra.type.AlgDataType;
 import org.polypheny.db.algebra.type.AlgDataTypeField;
 import org.polypheny.db.catalog.Catalog;
@@ -90,7 +87,6 @@ import org.polypheny.db.information.InformationPage;
 import org.polypheny.db.information.InformationQueryPlan;
 import org.polypheny.db.interpreter.BindableConvention;
 import org.polypheny.db.interpreter.Interpreters;
-import org.polypheny.db.languages.OperatorRegistry;
 import org.polypheny.db.monitoring.core.MonitoringServiceProvider;
 import org.polypheny.db.monitoring.events.DmlEvent;
 import org.polypheny.db.monitoring.events.QueryEvent;
@@ -315,6 +311,10 @@ public abstract class AbstractQueryProcessor implements QueryProcessor, Executio
         ParameterValueValidator valueValidator = new ParameterValueValidator( logicalRoot.validatedRowType, statement.getDataContext() );
         valueValidator.visit( logicalRoot.alg );
 
+        if ( logicalRoot.alg instanceof LogicalTableModify && ((TableModify) logicalRoot.alg).isUpdate() ) {
+            logicalRoot = EnumerableTableModifyAdjuster.adjust( logicalRoot, statement );
+        }
+
         if ( isAnalyze ) {
             statement.getProcessingDuration().stop( "Parameter Validation" );
         }
@@ -389,7 +389,7 @@ public abstract class AbstractQueryProcessor implements QueryProcessor, Executio
             // atm all filter are removed, even if the adapter could be capable of handling it itself,
             // for the future to prevent this the routed node could be checked and only substituted if it
             // is of another type then the adapter
-            if ( proposedRoutingPlans.get( 0 ).getRoutedRoot().alg instanceof LogicalTableModify
+            /*if ( proposedRoutingPlans.get( 0 ).getRoutedRoot().alg instanceof LogicalTableModify
                     && ((LogicalTableModify) indexLookupRoot.alg).getInput() instanceof LogicalFilter
                     && optimize( proposedRoutingPlans.get( 0 ).getRoutedRoot(), resultConvention ) instanceof EnumerableTableModify ) {
                 LogicalTableModify modify = ((LogicalTableModify) indexLookupRoot.alg);
@@ -450,7 +450,7 @@ public abstract class AbstractQueryProcessor implements QueryProcessor, Executio
                         builder.scan( indexLookupRoot.alg.getTable().getQualifiedName() ).aggregate( builder.groupKey(), builder.countStar( "ROWCOUNT" ) ).build(), Kind.SELECT );
 
                 proposedRoutingPlans = route( newRoot, statement, logicalQueryInformation );
-            }
+            }*/
 
             if ( isAnalyze ) {
                 statement.getRoutingDuration().start( "Flattener" );
@@ -647,7 +647,7 @@ public abstract class AbstractQueryProcessor implements QueryProcessor, Executio
 
     @AllArgsConstructor
     @Getter
-    private static class ProposedImplementations {
+    static class ProposedImplementations {
 
         private final List<ProposedRoutingPlan> proposedRoutingPlans;
         private final List<AlgNode> optimizedPlans;
@@ -1059,6 +1059,9 @@ public abstract class AbstractQueryProcessor implements QueryProcessor, Executio
         } else if ( logicalRoot.alg instanceof ConditionalExecute ) {
             AlgNode routedConditionalExecute = dmlRouter.handleConditionalExecute( logicalRoot.alg, statement, queryInformation );
             return Lists.newArrayList( new ProposedRoutingPlanImpl( routedConditionalExecute, logicalRoot, queryInformation.getQueryClass() ) );
+        } else if ( logicalRoot.alg instanceof ConditionalTableModify ) {
+            AlgNode handleConditionalTableModify = dmlRouter.handleConditionalTableModify( logicalRoot.alg, statement, queryInformation );
+            return Lists.newArrayList( new ProposedRoutingPlanImpl( handleConditionalTableModify, logicalRoot, queryInformation.getQueryClass() ) );
         } else {
             final List<ProposedRoutingPlan> proposedPlans = new ArrayList<>();
             if ( statement.getTransaction().isAnalyze() ) {

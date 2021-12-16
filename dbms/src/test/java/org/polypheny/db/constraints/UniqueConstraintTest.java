@@ -409,7 +409,6 @@ public class UniqueConstraintTest {
 
 
     @Test
-    @Ignore
     public void batchUpdateTest() throws SQLException {
         try ( JdbcConnection polyphenyDbConnection = new JdbcConnection( true ) ) {
             Connection connection = polyphenyDbConnection.getConnection();
