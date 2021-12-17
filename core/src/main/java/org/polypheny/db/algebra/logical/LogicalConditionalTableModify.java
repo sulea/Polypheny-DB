@@ -73,10 +73,10 @@ public class LogicalConditionalTableModify extends ConditionalTableModify {
         /////// query
         // first we create the query, which could retrieve the values for the prepared modify
         // if underlying adapter cannot handle it natively
-        Filter filter = (Filter) modify.getInput();
+        Filter filter = modify.getInput() instanceof Filter ? (Filter) modify.getInput() : (Filter) modify.getInput().getInput( 0 );
         // add all previous variables e.g. _id, _data(previous), _data(updated)
         // might only extract previous refs used in condition e.g. _data
-        List<String> update = new ArrayList<>( filter.getRowType().getFieldNames() );
+        List<String> update = filter.getRowType().getFieldNames().stream().map( name -> name + "$old" ).collect( Collectors.toList() );
         List<RexNode> source = filter.getRowType().getFieldList().stream().map( f -> RexInputRef.of( f.getIndex(), filter.getRowType() ) ).collect( Collectors.toList() );
 
         update.addAll( modify.getUpdateColumnList() );
@@ -106,10 +106,10 @@ public class LogicalConditionalTableModify extends ConditionalTableModify {
                 modify.getUpdateColumnList()
                         .stream()
                         .map( name -> {
-                            int size = modify.getTable().getRowType().getFieldList().size();
+                            int size = modify.getRowType().getFieldList().size();
                             int index = modify.getTable().getRowType().getFieldNames().indexOf( name );
                             return rexBuilder.makeDynamicParam(
-                                    modify.getTable().getRowType().getFieldList().get( index ).getType(), index + size );
+                                    modify.getTable().getRowType().getFieldList().get( index ).getType(), size + index );
                         } ).collect( Collectors.toList() ), false );
 
         return new LogicalConditionalTableModify( modify.getCluster(), modify.getTraitSet(), modify, query, prepared );

@@ -104,9 +104,12 @@ import org.polypheny.db.algebra.json.JsonExistsErrorBehavior;
 import org.polypheny.db.algebra.json.JsonQueryEmptyOrErrorBehavior;
 import org.polypheny.db.algebra.json.JsonQueryWrapperBehavior;
 import org.polypheny.db.algebra.json.JsonValueEmptyOrErrorBehavior;
+import org.polypheny.db.algebra.type.AlgDataType;
+import org.polypheny.db.algebra.type.AlgDataTypeSystem;
 import org.polypheny.db.interpreter.Row;
 import org.polypheny.db.runtime.FlatLists.ComparableList;
 import org.polypheny.db.type.PolyType;
+import org.polypheny.db.type.PolyTypeFactoryImpl;
 import org.polypheny.db.type.PolyTypeUtil;
 import org.polypheny.db.util.Bug;
 import org.polypheny.db.util.NumberUtil;
@@ -264,6 +267,36 @@ public class Functions {
             }
         }
         return null;
+    }
+
+
+    public static void intoContext( final DataContext context, final Enumerable<Object[]> baz, final List<String> types ) {
+        //context.resetParameterValues();
+        List<PolyType> polyTypes = types.stream().map( PolyType::valueOf ).collect( Collectors.toList() );
+        PolyTypeFactoryImpl factory = new PolyTypeFactoryImpl( AlgDataTypeSystem.DEFAULT );
+        List<AlgDataType> algDataTypes = polyTypes.stream().map( factory::createPolyType ).collect( Collectors.toList() );
+        //context.resetParameterValues();
+        // better approach would here be to create a new Datacontext and hand it to the executor
+        List<Object[]> values = new ArrayList<>();
+        for ( Object[] o : baz ) {
+            values.add( o );
+        }
+        context.resetParameterValues();
+        Map<Integer, List<Object>> vals = new HashMap<>();
+        for ( int i = 0; i < values.get( 0 ).length; i++ ) {
+            vals.put( i, new ArrayList<>() );
+        }
+        for ( Object[] value : values ) {
+            int i = 0;
+            for ( Object o1 : value ) {
+                vals.get( i ).add( o1 );
+                i++;
+            }
+        }
+        for ( int i = 0; i < values.get( 0 ).length; i++ ) {
+            context.addParameterValues( i, algDataTypes.get( i ), vals.get( i ) );
+        }
+        //return null;
     }
 
 

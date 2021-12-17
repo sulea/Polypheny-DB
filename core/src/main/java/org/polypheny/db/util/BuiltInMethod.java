@@ -135,6 +135,7 @@ import org.polypheny.db.type.PolyType;
  * Built-in methods.
  */
 public enum BuiltInMethod {
+    INTO_CONTEXT( Functions.class, "intoContext", DataContext.class, Enumerable.class, List.class ),
     PARSE_ARRAY_FROM_TEXT( Functions.class, "reparse", PolyType.class, Long.class, String.class ),
     QUERYABLE_SELECT( Queryable.class, "select", FunctionExpression.class ),
     QUERYABLE_AS_ENUMERABLE( Queryable.class, "asEnumerable" ),

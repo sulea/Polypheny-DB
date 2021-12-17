@@ -17,11 +17,17 @@
 package org.polypheny.db.adapter.enumerable;
 
 import java.util.List;
+import java.util.stream.Collectors;
 import org.apache.calcite.linq4j.tree.BlockBuilder;
+import org.apache.calcite.linq4j.tree.Expressions;
+import org.apache.calcite.linq4j.tree.MethodCallExpression;
+import org.polypheny.db.adapter.DataContext;
 import org.polypheny.db.algebra.AlgNode;
+import org.polypheny.db.algebra.convert.ConverterImpl;
 import org.polypheny.db.algebra.core.ConditionalTableModify;
 import org.polypheny.db.plan.AlgOptCluster;
 import org.polypheny.db.plan.AlgTraitSet;
+import org.polypheny.db.util.BuiltInMethod;
 
 public class EnumerableConditionalTableModify extends ConditionalTableModify implements EnumerableAlg {
 
@@ -57,14 +63,27 @@ public class EnumerableConditionalTableModify extends ConditionalTableModify imp
 
     @Override
     public Result implement( EnumerableAlgImplementor implementor, Prefer pref ) {
-        if ( !(getModify() instanceof EnumerableAlg) ) {
+        if ( getModify() instanceof ConverterImpl ) {
             return implementor.visitChild( this, 0, (EnumerableAlg) getModify(), pref );
         }
 
         final BlockBuilder builder = new BlockBuilder();
-        final Result conditionResult = implementor.visitChild( this, 0, (EnumerableAlg) getModify(), pref );
+        final Result query = implementor.visitChild( this, 1, (EnumerableAlg) getQuery(), pref );
 
-        return null;
+        MethodCallExpression transformContext = Expressions.call(
+                BuiltInMethod.INTO_CONTEXT.method,
+                Expressions.constant( DataContext.ROOT ),
+                builder.append( builder.newName( "provider" + System.nanoTime() ), query.block ),
+                Expressions.constant( getQuery().getRowType().getFieldList().stream().map( f -> f.getType().getPolyType().name() ).collect( Collectors.toList() ) ) );
+
+        final Result prepared = implementor.visitChild( this, 2, (EnumerableAlg) getPrepared(), pref );
+
+        builder.add( Expressions.statement( transformContext ) );
+        builder.add( Expressions.return_( null, builder.append( "test", prepared.block ) ) );
+
+        //builder.add( Expressions.return_( null, Expressions.constant( null ) ) );
+
+        return implementor.result( prepared.physType, builder.toBlock() );
     }
 
 }
