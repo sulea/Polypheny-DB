@@ -85,9 +85,9 @@ public interface DataContext {
     }
 
     default Object getParameterValue( long index ) {
-        if ( getParameterValues().size() != 1 ) {
+        /*if ( getParameterValues().size() != 1 ) { // todo dl: this should be possible
             throw new RuntimeException( "Illegal number of parameter sets" );
-        }
+        }*/
         return getParameterValues().get( 0 ).get( index );
     }
 

@@ -37,4 +37,6 @@ public interface DmlRouter {
 
     AlgNode handleConditionalTableModify( AlgNode alg, Statement statement, LogicalQueryInformation queryInformation );
 
+    AlgNode handleBatchIterator( AlgNode alg, Statement statement, LogicalQueryInformation queryInformation );
+
 }

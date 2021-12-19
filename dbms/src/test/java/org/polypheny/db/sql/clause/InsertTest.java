@@ -50,6 +50,7 @@ public class InsertTest {
 
 
     private void enableConstraints() throws SQLException {
+        //noinspection ResultOfMethodCallIgnored
         TestHelper.getInstance();
         try ( JdbcConnection polyphenyDbConnection = new JdbcConnection( true ) ) {
             Connection connection = polyphenyDbConnection.getConnection();

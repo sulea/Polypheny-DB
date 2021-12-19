@@ -29,7 +29,6 @@ import org.polypheny.db.adapter.DataContext.ParameterValue;
 import org.polypheny.db.algebra.AlgNode;
 import org.polypheny.db.algebra.AlgShuttleImpl;
 import org.polypheny.db.algebra.constant.Kind;
-import org.polypheny.db.algebra.core.ConditionalExecute;
 import org.polypheny.db.algebra.core.TableModify;
 import org.polypheny.db.algebra.logical.LogicalConditionalExecute;
 import org.polypheny.db.algebra.logical.LogicalDocuments;
@@ -105,25 +104,28 @@ public class QueryParameterizer extends AlgShuttleImpl implements RexVisitor<Rex
 
 
     @Override
+    public AlgNode visit( LogicalConditionalExecute input ) {
+        AlgNode right = input.getRight().accept( this );
+        AlgNode left = input.getLeft();
+        // left is always only one batch as it needs to return only one ResultSet
+        // right can be more, so we can only parametrize left if right has the same size
+        if ( this.batchSize == 1 ) {
+            left = left.accept( this );
+        }
+        return new LogicalConditionalExecute(
+                input.getCluster(),
+                input.getTraitSet(),
+                left,
+                right,
+                input.getCondition(),
+                input.getExceptionClass(),
+                input.getExceptionMessage() );
+    }
+
+
+    @Override
     public AlgNode visit( AlgNode other ) {
-        if ( other instanceof ConditionalExecute ) {
-            ConditionalExecute input = (ConditionalExecute) other;
-            AlgNode right = input.getRight().accept( this );
-            AlgNode left = input.getLeft();
-            // left is always only one batch as it needs to return only one ResultSet
-            // right can be more, so we can only parametrize left if right has the same size
-            if ( this.batchSize == 1 ) {
-                left = left.accept( this );
-            }
-            return new LogicalConditionalExecute(
-                    input.getCluster(),
-                    input.getTraitSet(),
-                    left,
-                    right,
-                    input.getCondition(),
-                    input.getExceptionClass(),
-                    input.getExceptionMessage() );
-        } else if ( other instanceof TableModify ) {
+        if ( other instanceof TableModify ) {
             LogicalTableModify modify = (LogicalTableModify) super.visit( other );
             List<RexNode> newSourceExpression = null;
             if ( modify.getSourceExpressionList() != null ) {

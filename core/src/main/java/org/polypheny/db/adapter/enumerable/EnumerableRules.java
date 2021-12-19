@@ -70,6 +70,8 @@ public class EnumerableRules {
 
     public static final EnumerableConditionalTableModifyRule ENUMERABLE_CONDITIONAL_TABLE_MODIFY_RULE = new EnumerableConditionalTableModifyRule();
 
+    public static final EnumerableBatchIteratorRule ENUMERABLE_BATCH_ITERATOR_RULE = new EnumerableBatchIteratorRule();
+
     public static final EnumerableProjectRule ENUMERABLE_PROJECT_RULE = new EnumerableProjectRule();
 
     public static final EnumerableFilterRule ENUMERABLE_FILTER_RULE = new EnumerableFilterRule();

@@ -32,8 +32,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.polypheny.db.algebra.AlgNode;
 import org.polypheny.db.algebra.AlgShuttleImpl;
 import org.polypheny.db.algebra.constant.Kind;
+import org.polypheny.db.algebra.core.ConditionalExecute;
+import org.polypheny.db.algebra.core.ConditionalTableModify;
 import org.polypheny.db.algebra.core.TableModify;
 import org.polypheny.db.algebra.core.TableModify.Operation;
+import org.polypheny.db.algebra.logical.LogicalBatchIterator;
 import org.polypheny.db.algebra.logical.LogicalConditionalExecute;
 import org.polypheny.db.algebra.logical.LogicalConditionalTableModify;
 import org.polypheny.db.algebra.logical.LogicalDocuments;
@@ -708,6 +711,8 @@ public class DmlRouterImpl extends BaseRouter implements DmlRouter {
             action = handleConditionalExecute( lce.getRight(), statement, queryInformation );
         } else if ( lce.getRight() instanceof TableModify ) {
             action = routeDml( lce.getRight(), statement );
+        } else if ( lce.getRight() instanceof ConditionalTableModify ) {
+            action = handleConditionalTableModify( lce.getRight(), statement, queryInformation );
         } else {
             throw new IllegalArgumentException();
         }
@@ -723,6 +728,24 @@ public class DmlRouterImpl extends BaseRouter implements DmlRouter {
         builder = RoutingManager.getInstance().getFallbackRouter().routeFirst( lce.getQuery(), builder, statement, alg.getCluster(), queryInformation );
 
         return LogicalConditionalTableModify.create( routeDml( lce.getModify(), statement ), builder.build(), routeDml( lce.getPrepared(), statement ) );
+    }
+
+
+    @Override
+    public AlgNode handleBatchIterator( AlgNode alg, Statement statement, LogicalQueryInformation queryInformation ) {
+        LogicalBatchIterator iterator = (LogicalBatchIterator) alg;
+        AlgNode input;
+        if ( iterator.getInput() instanceof TableModify ) {
+            input = routeDml( iterator.getInput(), statement );
+        } else if ( iterator.getInput() instanceof ConditionalExecute ) {
+            input = handleConditionalExecute( iterator.getInput(), statement, queryInformation );
+        } else if ( iterator.getInput() instanceof ConditionalTableModify ) {
+            input = handleConditionalTableModify( iterator.getInput(), statement, queryInformation );
+        } else {
+            throw new RuntimeException( "BachIterator had an unknown child!" );
+        }
+
+        return LogicalBatchIterator.create( input, statement );
     }
 
 

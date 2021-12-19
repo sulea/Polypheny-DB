@@ -70,6 +70,7 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
@@ -267,6 +268,32 @@ public class Functions {
             }
         }
         return null;
+    }
+
+
+    public static Enumerable<?> batch( final DataContext context, final Enumerable<Object[]> baz ) {
+        List<Object> results = new ArrayList<>();
+
+        List<Map<Long, Object>> values = new ArrayList<>( context.getParameterValues() );
+
+        if ( values.size() == 0 ) {
+            return baz;
+        }
+
+        Set<Long> keys = values.get( 0 ).keySet();
+        // due to the fact that the standard collector Collectors.toMap crashes with null values,
+        // we use the old school way here
+        Map<Long, AlgDataType> types = new HashMap<>();
+        keys.forEach( k -> types.put( k, context.getParameterType( k ) ) );
+
+        for ( Map<Long, Object> value : values ) {
+            context.resetParameterValues();
+            value.forEach( ( k, v ) -> context.addParameterValues( k, types.get( k ), Collections.singletonList( v ) ) );
+
+            Iterator<Object[]> iter = baz.iterator();
+            results.add( iter.next() );
+        }
+        return Linq4j.asEnumerable( results );
     }
 
 

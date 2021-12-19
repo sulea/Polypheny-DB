@@ -20,11 +20,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.polypheny.db.algebra.AlgNode;
+import org.polypheny.db.algebra.AlgShuttle;
 import org.polypheny.db.algebra.core.ConditionalTableModify;
 import org.polypheny.db.algebra.core.Filter;
 import org.polypheny.db.algebra.core.Project;
 import org.polypheny.db.algebra.core.TableModify.Operation;
 import org.polypheny.db.algebra.operators.OperatorName;
+import org.polypheny.db.algebra.type.AlgDataType;
 import org.polypheny.db.algebra.type.AlgDataTypeField;
 import org.polypheny.db.languages.OperatorRegistry;
 import org.polypheny.db.plan.AlgOptCluster;
@@ -73,11 +75,21 @@ public class LogicalConditionalTableModify extends ConditionalTableModify {
         /////// query
         // first we create the query, which could retrieve the values for the prepared modify
         // if underlying adapter cannot handle it natively
-        Filter filter = modify.getInput() instanceof Filter ? (Filter) modify.getInput() : (Filter) modify.getInput().getInput( 0 );
+        AlgNode node = modify.getInput() instanceof Filter
+                ? (Filter) modify.getInput()
+                : modify.getInput().getInput( 0 ) instanceof Filter
+                        ? (Filter) modify.getInput().getInput( 0 )
+                        : null;
+        if ( node == null ) {
+            node = modify.getInput() instanceof Project ? (Project) modify.getInput() : null;
+            if ( node == null ) {
+                throw new RuntimeException( "The was no Filter or Project under the TableModify, which was not considered!" );
+            }
+        }
         // add all previous variables e.g. _id, _data(previous), _data(updated)
         // might only extract previous refs used in condition e.g. _data
-        List<String> update = filter.getRowType().getFieldNames().stream().map( name -> name + "$old" ).collect( Collectors.toList() );
-        List<RexNode> source = filter.getRowType().getFieldList().stream().map( f -> RexInputRef.of( f.getIndex(), filter.getRowType() ) ).collect( Collectors.toList() );
+        List<String> update = new ArrayList<>( getOldFieldsNames( node.getRowType().getFieldNames() ) );
+        List<RexNode> source = new ArrayList<>( getOldFieldRefs( node.getRowType() ) );
 
         update.addAll( modify.getUpdateColumnList() );
         source.addAll( modify.getSourceExpressionList() );
@@ -113,6 +125,22 @@ public class LogicalConditionalTableModify extends ConditionalTableModify {
                         } ).collect( Collectors.toList() ), false );
 
         return new LogicalConditionalTableModify( modify.getCluster(), modify.getTraitSet(), modify, query, prepared );
+    }
+
+
+    private static List<RexInputRef> getOldFieldRefs( AlgDataType rowType ) {
+        return rowType.getFieldList().stream().map( f -> RexInputRef.of( f.getIndex(), rowType ) ).collect( Collectors.toList() );
+    }
+
+
+    private static List<String> getOldFieldsNames( List<String> names ) {
+        return names.stream().map( name -> name + "$old" ).collect( Collectors.toList() );
+    }
+
+
+    @Override
+    public AlgNode accept( AlgShuttle shuttle ) {
+        return shuttle.visit( this );
     }
 
 }

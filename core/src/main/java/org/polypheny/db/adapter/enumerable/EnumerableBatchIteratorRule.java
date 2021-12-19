@@ -19,27 +19,25 @@ package org.polypheny.db.adapter.enumerable;
 import org.polypheny.db.algebra.AlgNode;
 import org.polypheny.db.algebra.convert.ConverterRule;
 import org.polypheny.db.algebra.core.AlgFactories;
-import org.polypheny.db.algebra.logical.LogicalConditionalTableModify;
+import org.polypheny.db.algebra.logical.LogicalBatchIterator;
 import org.polypheny.db.plan.AlgOptRule;
 import org.polypheny.db.plan.Convention;
 
-public class EnumerableConditionalTableModifyRule extends ConverterRule {
+public class EnumerableBatchIteratorRule extends ConverterRule {
 
-    public EnumerableConditionalTableModifyRule() {
-        super( LogicalConditionalTableModify.class,
+    public EnumerableBatchIteratorRule() {
+        super( LogicalBatchIterator.class,
                 operand -> true,
                 Convention.NONE, EnumerableConvention.INSTANCE,
-                AlgFactories.LOGICAL_BUILDER, "EnumerableConditionalTableModify" );
+                AlgFactories.LOGICAL_BUILDER, "EnumerableBatchIterator" );
     }
 
 
     @Override
     public AlgNode convert( AlgNode alg ) {
-        final LogicalConditionalTableModify modify = (LogicalConditionalTableModify) alg;
-        final AlgNode input = AlgOptRule.convert( modify.getModify(), modify.getModify().getTraitSet().replace( EnumerableConvention.INSTANCE ) );
-        final AlgNode query = AlgOptRule.convert( modify.getQuery(), modify.getQuery().getTraitSet().replace( EnumerableConvention.INSTANCE ) );
-        final AlgNode prepared = AlgOptRule.convert( modify.getPrepared(), modify.getPrepared().getTraitSet().replace( EnumerableConvention.INSTANCE ) );
-        return EnumerableConditionalTableModify.create( input, query, prepared );
+        final LogicalBatchIterator iterator = (LogicalBatchIterator) alg;
+        final AlgNode input = AlgOptRule.convert( iterator.getInput(), iterator.getInput().getTraitSet().replace( EnumerableConvention.INSTANCE ) );
+        return EnumerableBatchIterator.create( input );
     }
 
 }

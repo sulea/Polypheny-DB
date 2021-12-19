@@ -16,7 +16,6 @@
 
 package org.polypheny.db.processing;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -168,6 +167,19 @@ public class EnumerableConstraintEnforcer implements ConstraintEnforcer {
 
                 if ( input instanceof Values ) {
                     builder.push( scan );
+                    for ( final String column : constraint.key.getColumnNames() ) {
+                        // we compare the value of the condition with the specified key of the TableScan to ensure the constraint
+                        RexInputRef fromScan = builder.field( 1, 0, column );
+                        RexNode joinComparison = rexBuilder.makeCall(
+                                OperatorRegistry.get( OperatorName.EQUALS ),
+                                new RexDynamicParam( fromScan.getType(), fromScan.getIndex() ),
+                                fromScan
+                        );
+                        builder.filter( rexBuilder.makeCall( OperatorRegistry.get( OperatorName.AND ), joinCondition, joinComparison ) );
+                    }
+
+                    // todo dl the bottom approach uses a left non-batch approach, which gives better performance in these scenarios
+                    /*builder.push( scan );
                     builder.project( constraint.key.getColumnNames().stream().map( builder::field ).collect( Collectors.toList() ) );
                     Values vals = (Values) input;
                     List<RexNode> ors = new ArrayList<>();
@@ -191,7 +203,7 @@ public class EnumerableConstraintEnforcer implements ConstraintEnforcer {
                         builder.filter( rexBuilder.makeCall( OperatorRegistry.get( OperatorName.OR ), ors ) );
                     } else {
                         builder.filter( ors.get( 0 ) );
-                    }
+                    }*/
                 } else {
                     builder.push( input );
                     builder.project( constraint.key.getColumnNames().stream().map( builder::field ).collect( Collectors.toList() ) );

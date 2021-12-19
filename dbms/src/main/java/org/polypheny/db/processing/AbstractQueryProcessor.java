@@ -58,11 +58,11 @@ import org.polypheny.db.algebra.AlgStructuredTypeFlattener;
 import org.polypheny.db.algebra.constant.ExplainFormat;
 import org.polypheny.db.algebra.constant.ExplainLevel;
 import org.polypheny.db.algebra.constant.Kind;
+import org.polypheny.db.algebra.core.BatchIterator;
 import org.polypheny.db.algebra.core.ConditionalExecute;
 import org.polypheny.db.algebra.core.ConditionalExecute.Condition;
 import org.polypheny.db.algebra.core.ConditionalTableModify;
 import org.polypheny.db.algebra.core.Sort;
-import org.polypheny.db.algebra.core.TableModify;
 import org.polypheny.db.algebra.core.Values;
 import org.polypheny.db.algebra.logical.LogicalConditionalExecute;
 import org.polypheny.db.algebra.logical.LogicalProject;
@@ -311,10 +311,6 @@ public abstract class AbstractQueryProcessor implements QueryProcessor, Executio
         ParameterValueValidator valueValidator = new ParameterValueValidator( logicalRoot.validatedRowType, statement.getDataContext() );
         valueValidator.visit( logicalRoot.alg );
 
-        if ( logicalRoot.alg instanceof LogicalTableModify && ((TableModify) logicalRoot.alg).isUpdate() ) {
-            logicalRoot = EnumerableTableModifyAdjuster.adjust( logicalRoot, statement );
-        }
-
         if ( isAnalyze ) {
             statement.getProcessingDuration().stop( "Parameter Validation" );
         }
@@ -361,6 +357,15 @@ public abstract class AbstractQueryProcessor implements QueryProcessor, Executio
                 statement.getProcessingDuration().stop( "Constraint Enforcement" );
                 statement.getProcessingDuration().start( "Index Lookup Rewrite" );
             }
+
+            if ( constraintsRoot.kind == Kind.UPDATE && EnumerableAdjuster.needsAdjustment( constraintsRoot.alg ) ) {
+                constraintsRoot = EnumerableAdjuster.adjustModify( constraintsRoot, statement );
+            }
+
+            if ( constraintsRoot.kind == Kind.UPDATE || constraintsRoot.kind == Kind.INSERT ) {
+                constraintsRoot = EnumerableAdjuster.adjustBatch( constraintsRoot, statement );
+            }
+
             AlgRoot indexLookupRoot = constraintsRoot;
             if ( RuntimeConfig.POLYSTORE_INDEXES_ENABLED.getBoolean() && RuntimeConfig.POLYSTORE_INDEXES_SIMPLIFY.getBoolean() ) {
                 indexLookupRoot = indexLookup( indexLookupRoot, statement );
@@ -385,72 +390,6 @@ public abstract class AbstractQueryProcessor implements QueryProcessor, Executio
             if ( proposedRoutingPlans == null ) {
                 proposedRoutingPlans = route( indexLookupRoot, statement, logicalQueryInformation );
             }
-
-            // atm all filter are removed, even if the adapter could be capable of handling it itself,
-            // for the future to prevent this the routed node could be checked and only substituted if it
-            // is of another type then the adapter
-            /*if ( proposedRoutingPlans.get( 0 ).getRoutedRoot().alg instanceof LogicalTableModify
-                    && ((LogicalTableModify) indexLookupRoot.alg).getInput() instanceof LogicalFilter
-                    && optimize( proposedRoutingPlans.get( 0 ).getRoutedRoot(), resultConvention ) instanceof EnumerableTableModify ) {
-                LogicalTableModify modify = ((LogicalTableModify) indexLookupRoot.alg);
-                AlgRoot filter = AlgRoot.of( modify.getInput(), Kind.SELECT );
-
-                // add all previous variables e.g. _id, _data(previous), _data(updated)
-                // might only extract previous refs used in condition e.g. _data
-                List<String> update = new ArrayList<>( filter.validatedRowType.getFieldNames() );
-                List<RexNode> source = filter.validatedRowType.getFieldList().stream().map( f -> RexInputRef.of( f.getIndex(), filter.validatedRowType ) ).collect( Collectors.toList() );
-
-                update.addAll( modify.getUpdateColumnList() );
-                source.addAll( modify.getSourceExpressionList() );
-
-                Project project = LogicalProject.create( modify.getInput(), source, update );
-                AlgRoot updated = AlgRoot.of( project, Kind.SELECT );
-
-                ProposedImplementations implementations = prepareQueryList( updated, updated.alg.getRowType(), isRouted, isSubQuery );
-
-                PolyResult result = implementations.getResults().get( 0 );
-                List<List<Object>> rows = result.getRows( statement, -1 );
-                for ( List<Object> row : rows ) {
-                    assert row.size() == 3;
-                    AlgBuilder builder = AlgBuilder.create( statement );
-                    // push TableScan
-                    builder.scan( modify.getTable().getQualifiedName() );
-                    builder = builder.filter(
-                            builder.getRexBuilder().makeCall(
-                                    OperatorRegistry.get( OperatorName.EQUALS ),
-                                    builder.getRexBuilder().makeLiteral(
-                                            row.get( 0 ),
-                                            updated.validatedRowType.getFieldList().get( 0 ).getType(),
-                                            true ),
-                                    builder.getRexBuilder().makeInputRef( updated.validatedRowType, 0 ) ) );
-
-                    AlgDataType type = updated.validatedRowType.getFieldList().get( 1 ).getType();
-
-                    updates.add( AlgRoot.of( LogicalTableModify.create(
-                            modify.getTable(),
-                            modify.getCatalogReader(),
-                            builder.build(),
-                            Operation.UPDATE,
-                            Collections.singletonList( updated.validatedRowType.getFieldNames().get( 1 ) ),
-                            Collections.singletonList(
-                                    row.get( 2 ) instanceof String
-                                            ? builder.getRexBuilder().makeLiteral( (String) row.get( 2 ) )
-                                            : builder.getRexBuilder().makeLiteral(
-                                                    row.get( 2 ),
-                                                    type, true ) ),
-                            false ), Kind.UPDATE ) );
-                }
-
-                for ( AlgRoot algRoot : updates ) {
-                    prepareQuery( algRoot, algRoot.validatedRowType, false, true, false ).getRows( statement, -1 );
-                }
-                AlgBuilder builder = AlgBuilder.create( statement );
-
-                AlgRoot newRoot = AlgRoot.of(
-                        builder.scan( indexLookupRoot.alg.getTable().getQualifiedName() ).aggregate( builder.groupKey(), builder.countStar( "ROWCOUNT" ) ).build(), Kind.SELECT );
-
-                proposedRoutingPlans = route( newRoot, statement, logicalQueryInformation );
-            }*/
 
             if ( isAnalyze ) {
                 statement.getRoutingDuration().start( "Flattener" );
@@ -1060,8 +999,11 @@ public abstract class AbstractQueryProcessor implements QueryProcessor, Executio
             AlgNode routedConditionalExecute = dmlRouter.handleConditionalExecute( logicalRoot.alg, statement, queryInformation );
             return Lists.newArrayList( new ProposedRoutingPlanImpl( routedConditionalExecute, logicalRoot, queryInformation.getQueryClass() ) );
         } else if ( logicalRoot.alg instanceof ConditionalTableModify ) {
-            AlgNode handleConditionalTableModify = dmlRouter.handleConditionalTableModify( logicalRoot.alg, statement, queryInformation );
-            return Lists.newArrayList( new ProposedRoutingPlanImpl( handleConditionalTableModify, logicalRoot, queryInformation.getQueryClass() ) );
+            AlgNode routedConditionalTableModify = dmlRouter.handleConditionalTableModify( logicalRoot.alg, statement, queryInformation );
+            return Lists.newArrayList( new ProposedRoutingPlanImpl( routedConditionalTableModify, logicalRoot, queryInformation.getQueryClass() ) );
+        } else if ( logicalRoot.alg instanceof BatchIterator ) {
+            AlgNode routedIterator = dmlRouter.handleBatchIterator( logicalRoot.alg, statement, queryInformation );
+            return Lists.newArrayList( new ProposedRoutingPlanImpl( routedIterator, logicalRoot, queryInformation.getQueryClass() ) );
         } else {
             final List<ProposedRoutingPlan> proposedPlans = new ArrayList<>();
             if ( statement.getTransaction().isAnalyze() ) {
