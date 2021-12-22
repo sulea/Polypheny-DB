@@ -47,7 +47,7 @@ import org.polypheny.db.plan.Convention;
 
 
 /**
- * Planner rule that converts a {@link org.polypheny.db.algebra.logical.LogicalJoin} relational expression {@link org.polypheny.db.adapter.enumerable.EnumerableConvention enumerable calling convention}.
+ * Planner rule that converts a {@link LogicalJoin} relational expression {@link EnumerableConvention enumerable calling convention}.
  */
 class EnumerableJoinRule extends ConverterRule {
 
@@ -71,7 +71,7 @@ class EnumerableJoinRule extends ConverterRule {
         final AlgNode right = newInputs.get( 1 );
         final JoinInfo info = JoinInfo.of( left, right, join.getCondition() );
         if ( !info.isEqui() && join.getJoinType() != JoinAlgType.INNER ) {
-            // EnumerableJoinRel only supports equi-join. We can put a filter on top if it is an inner join.
+            // EnumerableJoinAlg only supports equi-join. We can put a filter on top if it is an inner join.
             try {
                 return EnumerableThetaJoin.create( left, right, join.getCondition(), join.getVariablesSet(), join.getJoinType() );
             } catch ( InvalidAlgException e ) {

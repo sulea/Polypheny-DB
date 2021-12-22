@@ -31,6 +31,7 @@ import org.polypheny.db.algebra.AlgShuttleImpl;
 import org.polypheny.db.algebra.constant.Kind;
 import org.polypheny.db.algebra.core.TableModify;
 import org.polypheny.db.algebra.logical.LogicalConditionalExecute;
+import org.polypheny.db.algebra.logical.LogicalConstraintEnforcer;
 import org.polypheny.db.algebra.logical.LogicalDocuments;
 import org.polypheny.db.algebra.logical.LogicalFilter;
 import org.polypheny.db.algebra.logical.LogicalModifyCollect;
@@ -120,6 +121,20 @@ public class QueryParameterizer extends AlgShuttleImpl implements RexVisitor<Rex
                 input.getCondition(),
                 input.getExceptionClass(),
                 input.getExceptionMessage() );
+    }
+
+
+    @Override
+    public AlgNode visit( LogicalConstraintEnforcer enforcer ) {
+        AlgNode modify = enforcer.getLeft().accept( this );
+
+        return new LogicalConstraintEnforcer(
+                enforcer.getCluster(),
+                enforcer.getTraitSet(),
+                modify,
+                enforcer.getRight(),
+                enforcer.getExceptionClasses(),
+                enforcer.getExceptionMessages() );
     }
 
 

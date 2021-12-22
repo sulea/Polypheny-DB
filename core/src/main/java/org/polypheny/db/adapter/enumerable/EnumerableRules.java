@@ -72,6 +72,8 @@ public class EnumerableRules {
 
     public static final EnumerableBatchIteratorRule ENUMERABLE_BATCH_ITERATOR_RULE = new EnumerableBatchIteratorRule();
 
+    public static final EnumerableConstraintEnforcerRule ENUMERABLE_CONSTRAINT_ENFORCER_RULE = new EnumerableConstraintEnforcerRule();
+
     public static final EnumerableProjectRule ENUMERABLE_PROJECT_RULE = new EnumerableProjectRule();
 
     public static final EnumerableFilterRule ENUMERABLE_FILTER_RULE = new EnumerableFilterRule();

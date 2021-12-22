@@ -62,6 +62,7 @@ import org.polypheny.db.algebra.core.BatchIterator;
 import org.polypheny.db.algebra.core.ConditionalExecute;
 import org.polypheny.db.algebra.core.ConditionalExecute.Condition;
 import org.polypheny.db.algebra.core.ConditionalTableModify;
+import org.polypheny.db.algebra.core.ConstraintEnforcer;
 import org.polypheny.db.algebra.core.Sort;
 import org.polypheny.db.algebra.core.Values;
 import org.polypheny.db.algebra.logical.LogicalConditionalExecute;
@@ -346,10 +347,10 @@ public abstract class AbstractQueryProcessor implements QueryProcessor, Executio
                 statement.getProcessingDuration().start( "Constraint Enforcement" );
             }
             AlgRoot constraintsRoot = indexUpdateRoot;
-            if ( RuntimeConfig.UNIQUE_CONSTRAINT_ENFORCEMENT.getBoolean() || RuntimeConfig.FOREIGN_KEY_ENFORCEMENT.getBoolean() ) {
+            /*if ( RuntimeConfig.UNIQUE_CONSTRAINT_ENFORCEMENT.getBoolean() || RuntimeConfig.FOREIGN_KEY_ENFORCEMENT.getBoolean() ) {
                 ConstraintEnforcer constraintEnforcer = new EnumerableConstraintEnforcer();
                 constraintsRoot = constraintEnforcer.enforce( constraintsRoot, statement );
-            }
+            }*/
 
             //
             // Index Lookup Rewrite
@@ -364,6 +365,10 @@ public abstract class AbstractQueryProcessor implements QueryProcessor, Executio
 
             if ( constraintsRoot.kind == Kind.UPDATE || constraintsRoot.kind == Kind.INSERT ) {
                 constraintsRoot = EnumerableAdjuster.adjustBatch( constraintsRoot, statement );
+            }
+
+            if ( constraintsRoot.kind.belongsTo( Kind.DML ) && (RuntimeConfig.UNIQUE_CONSTRAINT_ENFORCEMENT.getBoolean() || RuntimeConfig.FOREIGN_KEY_ENFORCEMENT.getBoolean()) ) {
+                constraintsRoot = EnumerableAdjuster.adjustConstraint( constraintsRoot, statement );
             }
 
             AlgRoot indexLookupRoot = constraintsRoot;
@@ -1004,6 +1009,9 @@ public abstract class AbstractQueryProcessor implements QueryProcessor, Executio
         } else if ( logicalRoot.alg instanceof BatchIterator ) {
             AlgNode routedIterator = dmlRouter.handleBatchIterator( logicalRoot.alg, statement, queryInformation );
             return Lists.newArrayList( new ProposedRoutingPlanImpl( routedIterator, logicalRoot, queryInformation.getQueryClass() ) );
+        } else if ( logicalRoot.alg instanceof ConstraintEnforcer ) {
+            AlgNode routedConstraintEnforcer = dmlRouter.handleConstraintEnforcer( logicalRoot.alg, statement, queryInformation );
+            return Lists.newArrayList( new ProposedRoutingPlanImpl( routedConstraintEnforcer, logicalRoot, queryInformation.getQueryClass() ) );
         } else {
             final List<ProposedRoutingPlan> proposedPlans = new ArrayList<>();
             if ( statement.getTransaction().isAnalyze() ) {

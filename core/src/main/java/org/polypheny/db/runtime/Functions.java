@@ -39,6 +39,7 @@ import com.drew.imaging.ImageProcessingException;
 import com.drew.metadata.Directory;
 import com.drew.metadata.Metadata;
 import com.drew.metadata.Tag;
+import com.google.common.base.Joiner;
 import com.google.gson.Gson;
 import com.jayway.jsonpath.Configuration;
 import com.jayway.jsonpath.DocumentContext;
@@ -100,6 +101,7 @@ import org.apache.calcite.linq4j.function.NonDeterministic;
 import org.apache.calcite.linq4j.tree.Primitive;
 import org.polypheny.db.adapter.DataContext;
 import org.polypheny.db.adapter.enumerable.JavaRowFormat;
+import org.polypheny.db.algebra.exceptions.ConstraintViolationException;
 import org.polypheny.db.algebra.json.JsonConstructorNullClause;
 import org.polypheny.db.algebra.json.JsonExistsErrorBehavior;
 import org.polypheny.db.algebra.json.JsonQueryEmptyOrErrorBehavior;
@@ -324,6 +326,26 @@ public class Functions {
             context.addParameterValues( i, algDataTypes.get( i ), vals.get( i ) );
         }
         //return null;
+    }
+
+
+    public static Enumerable<?> enforceConstraint( Enumerable<Object[]> modify, Enumerable<Object[]> control, List<Class<? extends Exception>> exceptions, List<String> msgs ) {
+        // todo move into operator
+        List<Object> results = new ArrayList<>();
+        for ( Object object : modify ) {
+            results.add( object );
+        }
+
+        List<Integer> validationIndexes = new ArrayList<>();
+        for ( Object object : control ) {
+            validationIndexes.add( (Integer) ((Object[]) object)[1] );
+        }
+        if ( validationIndexes.size() == 0 ) {
+            return Linq4j.asEnumerable( results );
+        } else {
+            // force rollback
+            throw new ConstraintViolationException( Joiner.on( "\n" ).join( msgs ) );
+        }
     }
 
 

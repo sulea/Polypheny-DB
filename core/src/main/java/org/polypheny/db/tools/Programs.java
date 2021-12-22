@@ -129,6 +129,7 @@ public class Programs {
                     EnumerableRules.ENUMERABLE_CONDITIONAL_EXECUTE_FALSE_RULE,
                     EnumerableRules.ENUMERABLE_CONDITIONAL_TABLE_MODIFY_RULE,
                     EnumerableRules.ENUMERABLE_BATCH_ITERATOR_RULE,
+                    EnumerableRules.ENUMERABLE_CONSTRAINT_ENFORCER_RULE,
                     EnumerableRules.ENUMERABLE_PROJECT_RULE,
                     EnumerableRules.ENUMERABLE_FILTER_RULE,
                     EnumerableRules.ENUMERABLE_AGGREGATE_RULE,

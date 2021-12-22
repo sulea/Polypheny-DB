@@ -32,13 +32,16 @@ import lombok.extern.slf4j.Slf4j;
 import org.polypheny.db.algebra.AlgNode;
 import org.polypheny.db.algebra.AlgShuttleImpl;
 import org.polypheny.db.algebra.constant.Kind;
+import org.polypheny.db.algebra.core.BatchIterator;
 import org.polypheny.db.algebra.core.ConditionalExecute;
 import org.polypheny.db.algebra.core.ConditionalTableModify;
+import org.polypheny.db.algebra.core.ConstraintEnforcer;
 import org.polypheny.db.algebra.core.TableModify;
 import org.polypheny.db.algebra.core.TableModify.Operation;
 import org.polypheny.db.algebra.logical.LogicalBatchIterator;
 import org.polypheny.db.algebra.logical.LogicalConditionalExecute;
 import org.polypheny.db.algebra.logical.LogicalConditionalTableModify;
+import org.polypheny.db.algebra.logical.LogicalConstraintEnforcer;
 import org.polypheny.db.algebra.logical.LogicalDocuments;
 import org.polypheny.db.algebra.logical.LogicalFilter;
 import org.polypheny.db.algebra.logical.LogicalModifyCollect;
@@ -732,6 +735,31 @@ public class DmlRouterImpl extends BaseRouter implements DmlRouter {
 
 
     @Override
+    public AlgNode handleConstraintEnforcer( AlgNode alg, Statement statement, LogicalQueryInformation queryInformation ) {
+        LogicalConstraintEnforcer constraint = (LogicalConstraintEnforcer) alg;
+        RoutedAlgBuilder builder = RoutedAlgBuilder.create( statement, alg.getCluster() );
+        builder = RoutingManager.getInstance().getFallbackRouter().routeFirst( constraint.getRight(), builder, statement, alg.getCluster(), queryInformation );
+
+        if ( constraint.getLeft() instanceof TableModify ) {
+            return LogicalConstraintEnforcer.create(
+                    routeDml( constraint.getLeft(), statement ),
+                    builder.build(),
+                    constraint.getExceptionClasses(),
+                    constraint.getExceptionMessages() );
+        } else if ( constraint.getLeft() instanceof BatchIterator ) {
+            return LogicalConstraintEnforcer.create(
+                    handleBatchIterator( constraint.getLeft(), statement, queryInformation ),
+                    builder.build(),
+                    constraint.getExceptionClasses(),
+                    constraint.getExceptionMessages() );
+        } else {
+            throw new RuntimeException( "The provided modify query for the ConstraintEnforcer was not recognized!" );
+        }
+
+    }
+
+
+    @Override
     public AlgNode handleBatchIterator( AlgNode alg, Statement statement, LogicalQueryInformation queryInformation ) {
         LogicalBatchIterator iterator = (LogicalBatchIterator) alg;
         AlgNode input;
@@ -741,6 +769,8 @@ public class DmlRouterImpl extends BaseRouter implements DmlRouter {
             input = handleConditionalExecute( iterator.getInput(), statement, queryInformation );
         } else if ( iterator.getInput() instanceof ConditionalTableModify ) {
             input = handleConditionalTableModify( iterator.getInput(), statement, queryInformation );
+        } else if ( iterator.getInput() instanceof ConstraintEnforcer ) {
+            input = handleConstraintEnforcer( iterator.getInput(), statement, queryInformation );
         } else {
             throw new RuntimeException( "BachIterator had an unknown child!" );
         }

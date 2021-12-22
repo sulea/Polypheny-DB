@@ -24,6 +24,7 @@ import org.polypheny.db.algebra.core.TableModify;
 import org.polypheny.db.algebra.logical.LogicalBatchIterator;
 import org.polypheny.db.algebra.logical.LogicalConditionalExecute;
 import org.polypheny.db.algebra.logical.LogicalConditionalTableModify;
+import org.polypheny.db.algebra.logical.LogicalConstraintEnforcer;
 import org.polypheny.db.algebra.logical.LogicalTableModify;
 import org.polypheny.db.transaction.Statement;
 
@@ -59,6 +60,13 @@ public class EnumerableAdjuster {
     }
 
 
+    public static AlgRoot adjustConstraint( AlgRoot root, Statement statement ) {
+        return AlgRoot.of(
+                LogicalConstraintEnforcer.create( root.alg, statement ),
+                root.kind );
+    }
+
+
     private static class ModifyAdjuster extends AlgShuttleImpl {
 
         private final Statement statement;
@@ -79,6 +87,11 @@ public class EnumerableAdjuster {
                 return lce.getRight().accept( this );
             }
         }
+
+    }
+
+
+    private static class ConstraintAdjuster extends AlgShuttleImpl {
 
     }
 

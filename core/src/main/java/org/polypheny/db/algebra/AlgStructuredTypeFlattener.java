@@ -31,7 +31,6 @@ import java.util.SortedMap;
 import java.util.SortedSet;
 import org.apache.calcite.linq4j.Ord;
 import org.polypheny.db.algebra.constant.Kind;
-import org.polypheny.db.algebra.core.BatchIterator;
 import org.polypheny.db.algebra.core.Collect;
 import org.polypheny.db.algebra.core.CorrelationId;
 import org.polypheny.db.algebra.core.Sample;
@@ -43,6 +42,7 @@ import org.polypheny.db.algebra.logical.LogicalBatchIterator;
 import org.polypheny.db.algebra.logical.LogicalCalc;
 import org.polypheny.db.algebra.logical.LogicalConditionalExecute;
 import org.polypheny.db.algebra.logical.LogicalConditionalTableModify;
+import org.polypheny.db.algebra.logical.LogicalConstraintEnforcer;
 import org.polypheny.db.algebra.logical.LogicalCorrelate;
 import org.polypheny.db.algebra.logical.LogicalFilter;
 import org.polypheny.db.algebra.logical.LogicalIntersect;
@@ -349,7 +349,13 @@ public class AlgStructuredTypeFlattener implements ReflectiveVisitor {
 
 
     public void rewriteAlg( LogicalBatchIterator alg ) {
-        BatchIterator newAlg = LogicalBatchIterator.create( alg.getInput() );
+        LogicalBatchIterator newAlg = LogicalBatchIterator.create( alg.getInput() );
+        setNewForOldRel( alg, newAlg );
+    }
+
+
+    public void rewriteAlg( LogicalConstraintEnforcer alg ) {
+        LogicalConstraintEnforcer newAlg = LogicalConstraintEnforcer.create( alg.getLeft(), alg.getRight(), alg.getExceptionClasses(), alg.getExceptionMessages() );
         setNewForOldRel( alg, newAlg );
     }
 

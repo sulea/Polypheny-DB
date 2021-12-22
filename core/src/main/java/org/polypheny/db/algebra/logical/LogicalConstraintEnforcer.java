@@ -1,0 +1,273 @@
+/*
+ * Copyright 2019-2021 The Polypheny Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.polypheny.db.algebra.logical;
+
+import com.google.common.collect.ImmutableList;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
+import org.polypheny.db.algebra.AlgNode;
+import org.polypheny.db.algebra.AlgShuttle;
+import org.polypheny.db.algebra.core.BatchIterator;
+import org.polypheny.db.algebra.core.ConditionalTableModify;
+import org.polypheny.db.algebra.core.ConstraintEnforcer;
+import org.polypheny.db.algebra.core.TableModify;
+import org.polypheny.db.algebra.exceptions.ConstraintViolationException;
+import org.polypheny.db.algebra.operators.OperatorName;
+import org.polypheny.db.catalog.Catalog;
+import org.polypheny.db.catalog.Catalog.ConstraintType;
+import org.polypheny.db.catalog.entity.CatalogConstraint;
+import org.polypheny.db.catalog.entity.CatalogForeignKey;
+import org.polypheny.db.catalog.entity.CatalogPrimaryKey;
+import org.polypheny.db.catalog.entity.CatalogSchema;
+import org.polypheny.db.catalog.entity.CatalogTable;
+import org.polypheny.db.catalog.exceptions.UnknownSchemaException;
+import org.polypheny.db.catalog.exceptions.UnknownTableException;
+import org.polypheny.db.config.RuntimeConfig;
+import org.polypheny.db.languages.OperatorRegistry;
+import org.polypheny.db.plan.AlgOptCluster;
+import org.polypheny.db.plan.AlgTraitSet;
+import org.polypheny.db.rex.RexBuilder;
+import org.polypheny.db.rex.RexInputRef;
+import org.polypheny.db.schema.LogicalTable;
+import org.polypheny.db.tools.AlgBuilder;
+import org.polypheny.db.transaction.Statement;
+
+@Slf4j
+public class LogicalConstraintEnforcer extends ConstraintEnforcer {
+
+    /**
+     * This class checks if after a DML operation the constraints on the involved
+     * entities still are valid.
+     *
+     * @param modify is the initial dml query, which modifies the entity
+     * @param control is the control query, which tests if still all conditions are correct
+     * @param exceptionClasses
+     * @param exceptionMessages
+     */
+    public LogicalConstraintEnforcer( AlgOptCluster cluster, AlgTraitSet traitSet, AlgNode modify, AlgNode control, List<Class<? extends Exception>> exceptionClasses, List<String> exceptionMessages ) {
+        super(
+                cluster,
+                traitSet,
+                modify,
+                control,
+                exceptionClasses,
+                exceptionMessages );
+    }
+
+
+    private static EnforcementInformation getControl( AlgNode node, Statement statement ) {
+        TableModify modify;
+        // todo maybe use shuttle?
+        if ( node instanceof TableModify ) {
+            modify = (TableModify) node;
+        } else if ( node instanceof BatchIterator ) {
+            if ( node.getInput( 0 ) instanceof TableModify ) {
+                modify = (TableModify) node.getInput( 0 );
+            } else if ( node.getInput( 0 ) instanceof ConditionalTableModify ) {
+                modify = (TableModify) ((ConditionalTableModify) node.getInput( 0 )).getModify();
+            } else {
+                throw new RuntimeException( "The tree did no conform, while generating the constraint enforcement query!" );
+            }
+
+        } else {
+            throw new RuntimeException( "The tree did no conform, while generating the constraint enforcement query!" );
+        }
+        statement.getTransaction().getId();
+
+        final Catalog catalog = Catalog.getInstance();
+        String schemaName;
+        if ( modify.getTable().getTable() instanceof LogicalTable ) {
+            schemaName = ((LogicalTable) modify.getTable().getTable()).getLogicalSchemaName();
+        } else if ( modify.getTable().getQualifiedName().size() == 2 ) {
+            schemaName = modify.getTable().getQualifiedName().get( 0 );
+        } else if ( modify.getTable().getQualifiedName().size() == 3 ) {
+            schemaName = modify.getTable().getQualifiedName().get( 1 );
+        } else {
+            throw new RuntimeException( "The schema was not provided correctly!" );
+        }
+        final CatalogSchema schema;
+        try {
+            schema = catalog.getSchema( Catalog.defaultDatabaseId, schemaName );
+        } catch ( UnknownSchemaException e ) {
+            throw new RuntimeException( "The schema was not provided correctly!" );
+        }
+        final CatalogTable table;
+        final CatalogPrimaryKey primaryKey;
+        final List<CatalogConstraint> constraints;
+        final List<CatalogForeignKey> foreignKeys;
+        final List<CatalogForeignKey> exportedKeys;
+
+        try {
+            String tableName;
+            if ( modify.getTable().getQualifiedName().size() == 1 ) { // tableName
+                tableName = modify.getTable().getQualifiedName().get( 0 );
+            } else if ( modify.getTable().getQualifiedName().size() == 2 ) { // schemaName.tableName
+                if ( !schema.name.equalsIgnoreCase( modify.getTable().getQualifiedName().get( 0 ) ) ) {
+                    throw new RuntimeException( "Schema name does not match expected schema name: " + modify.getTable().getQualifiedName().get( 0 ) );
+                }
+                tableName = modify.getTable().getQualifiedName().get( 1 );
+            } else {
+                throw new RuntimeException( "Invalid table name: " + modify.getTable().getQualifiedName() );
+            }
+            table = catalog.getTable( schema.id, tableName );
+            primaryKey = catalog.getPrimaryKey( table.primaryKey );
+            constraints = new ArrayList<>( Catalog.getInstance().getConstraints( table.id ) );
+            foreignKeys = Catalog.getInstance().getForeignKeys( table.id );
+            exportedKeys = Catalog.getInstance().getExportedKeys( table.id );
+            // Turn primary key into an artificial unique constraint
+            CatalogPrimaryKey pk = Catalog.getInstance().getPrimaryKey( table.primaryKey );
+            final CatalogConstraint pkc = new CatalogConstraint( 0L, pk.id, ConstraintType.UNIQUE, "PRIMARY KEY", pk );
+            constraints.add( pkc );
+        } catch ( UnknownTableException e ) {
+            log.error( "Caught exception", e );
+            return new EnforcementInformation( modify, ImmutableList.of(), ImmutableList.of() );
+        }
+
+        AlgNode constrainedNode = modify;
+
+        //
+        //  Enforce UNIQUE constraints in INSERT operations
+        //
+        int pos = 0;
+        List<String> errorMessages = new ArrayList<>();
+        List<Class<? extends Exception>> errorClasses = new ArrayList<>();
+        if ( (modify.isInsert() || modify.isMerge() || modify.isUpdate()) && RuntimeConfig.UNIQUE_CONSTRAINT_ENFORCEMENT.getBoolean() ) {
+            AlgBuilder builder = AlgBuilder.create( statement );
+            final RexBuilder rexBuilder = builder.getRexBuilder();
+            builder.scan( table.getSchemaName(), table.name );
+
+            List<AlgNode> filters = new ArrayList<>();
+            for ( CatalogConstraint constraint : constraints ) {
+                builder.clear();
+                final AlgNode scan = LogicalTableScan.create( modify.getCluster(), modify.getTable() );
+                builder.push( scan );
+                // Enforce uniqueness between the already existing values and the new values
+                List<RexInputRef> keys = constraint.key
+                        .getColumnNames()
+                        .stream()
+                        .map( builder::field )
+                        .collect( Collectors.toList() );
+                builder.project( keys );
+
+                builder.aggregate( builder.groupKey( builder.fields() ), builder.aggregateCall( OperatorRegistry.getAgg( OperatorName.COUNT ) ).as( "count" ) );
+                if ( keys.size() > 1 ) {
+                    builder.project( builder.field( "count" ) );
+                }
+
+                builder.filter( builder.call( OperatorRegistry.get( OperatorName.GREATER_THAN ), builder.field( "count" ), builder.literal( 1 ) ) );
+                // we attach constant to later retrieve the corresponding constraint, which was violated
+                builder.project( builder.field( "count" ), builder.literal( pos ) );
+                filters.add( builder.build() );
+                String type = modify.isInsert() ? "Insert" : modify.isUpdate() ? "Update" : modify.isMerge() ? "Merge" : null;
+                errorMessages.add( String.format( "%s violates unique constraint `%s`.`%s`", type, table.name, constraint.name ) );
+                errorClasses.add( ConstraintViolationException.class );
+                pos++;
+            }
+            if ( filters.size() == 1 ) {
+                constrainedNode = filters.get( 0 );
+            } else {
+                filters.forEach( builder::push );
+                builder.union( true );
+                constrainedNode = builder.build();
+            }
+        }
+
+        //
+        //  Enforce FOREIGN KEY constraints in INSERT operations
+        //
+        if ( modify.isInsert() && RuntimeConfig.FOREIGN_KEY_ENFORCEMENT.getBoolean() ) {
+            // todo
+        }
+
+        //
+        //  Enforce FOREIGN KEY constraints in UPDATE operations
+        //
+        if ( (modify.isUpdate() || modify.isMerge()) && RuntimeConfig.FOREIGN_KEY_ENFORCEMENT.getBoolean() ) {
+            // todo
+        }
+
+        //
+        //  Enforce reverse FOREIGN KEY constraints in UPDATE and DELETE operations
+        //
+        if ( (modify.isDelete() || modify.isUpdate() || modify.isMerge()) && RuntimeConfig.FOREIGN_KEY_ENFORCEMENT.getBoolean() ) {
+            // todo
+        }
+        if ( constrainedNode instanceof TableModify ) {
+            throw new RuntimeException( "Constrained node was not correctly set!" );
+        }
+
+        // todo dl add missing tree ui
+        return new EnforcementInformation( constrainedNode, errorClasses, errorMessages );
+    }
+
+
+    public static LogicalConstraintEnforcer create( AlgNode modify, AlgNode control, List<Class<? extends Exception>> exceptionClasses, List<String> exceptionMessages ) {
+        return new LogicalConstraintEnforcer(
+                modify.getCluster(),
+                modify.getTraitSet(),
+                modify,
+                control,
+                exceptionClasses,
+                exceptionMessages
+        );
+    }
+
+
+    public static AlgNode create( AlgNode modify, Statement statement ) {
+        EnforcementInformation information = getControl( modify, statement );
+        return new LogicalConstraintEnforcer( modify.getCluster(), modify.getTraitSet(), modify, information.getControl(), information.getErrorClasses(), information.getErrorMessages() );
+    }
+
+
+    @Override
+    public AlgNode copy( AlgTraitSet traitSet, List<AlgNode> inputs ) {
+        return new LogicalConstraintEnforcer(
+                inputs.get( 0 ).getCluster(),
+                traitSet,
+                inputs.get( 0 ),
+                inputs.get( 1 ),
+                this.getExceptionClasses(),
+                this.getExceptionMessages() );
+    }
+
+
+    @Override
+    public AlgNode accept( AlgShuttle shuttle ) {
+        return shuttle.visit( this );
+    }
+
+
+    @Getter
+    private static class EnforcementInformation {
+
+        private final AlgNode control;
+        private final List<Class<? extends Exception>> errorClasses;
+        private final List<String> errorMessages;
+
+
+        public EnforcementInformation( AlgNode control, List<Class<? extends Exception>> errorClasses, List<String> errorMessages ) {
+            this.control = control;
+            this.errorClasses = errorClasses;
+            this.errorMessages = errorMessages;
+        }
+
+    }
+
+}
