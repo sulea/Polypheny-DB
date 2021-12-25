@@ -238,7 +238,13 @@ public abstract class Join extends BiAlg {
      * @param semiJoinDone Whether this join has been translated to a semi-join
      * @return Copy of this join
      */
-    public abstract Join copy( AlgTraitSet traitSet, RexNode conditionExpr, AlgNode left, AlgNode right, JoinAlgType joinType, boolean semiJoinDone );
+    public abstract Join copy(
+            AlgTraitSet traitSet,
+            RexNode conditionExpr,
+            AlgNode left,
+            AlgNode right,
+            JoinAlgType joinType,
+            boolean semiJoinDone );
 
 
     /**

@@ -234,7 +234,7 @@ public class TestHelper {
     }
 
 
-    private static List<Object[]> convertResultSetToList( ResultSet resultSet ) throws SQLException {
+    public static List<Object[]> convertResultSetToList( ResultSet resultSet ) throws SQLException {
         ResultSetMetaData md = resultSet.getMetaData();
         int columns = md.getColumnCount();
         List<Object[]> list = new ArrayList<>();

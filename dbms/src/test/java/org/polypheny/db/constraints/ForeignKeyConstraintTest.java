@@ -37,7 +37,6 @@ import org.polypheny.db.TestHelper.JdbcConnection;
 
 @SuppressWarnings({ "SqlDialectInspection", "SqlNoDataSourceInspection" })
 @Slf4j
-@Ignore
 @RunWith(Parameterized.class)
 public class ForeignKeyConstraintTest {
 
@@ -173,13 +172,16 @@ public class ForeignKeyConstraintTest {
 
                 try {
                     statement.executeUpdate( "INSERT INTO constraint_test VALUES (1, 1, 1, 1), (2, 2, 2, 2)" );
+                    connection.commit();
                     try {
                         statement.executeUpdate( "INSERT INTO constraint_test2 VALUES (3, 1), (4, 3)" );
                         Assert.fail( "Expected ConstraintViolationException was not thrown" );
                     } catch ( AvaticaSqlException e ) {
-                        if ( !e.getErrorMessage().contains( "Remote driver error: Insert violates foreign key constraint" ) ) {
+                        if ( !(e.getErrorMessage().contains( "Remote driver error:" )
+                                && e.getErrorMessage().contains( "Insert violates foreign key constraint" )) ) {
                             throw new RuntimeException( "Unexpected exception", e );
                         }
+                        connection.rollback();
                     }
                     TestHelper.checkResultSet(
                             statement.executeQuery( "SELECT COUNT(ctid) FROM constraint_test" ),
@@ -199,6 +201,7 @@ public class ForeignKeyConstraintTest {
 
 
     @Test
+    @Ignore // todo dl enable as soon as such inserts work correctly
     public void testInsertSelectNoConflict() throws SQLException {
         try ( JdbcConnection polyphenyDbConnection = new JdbcConnection( true ) ) {
             Connection connection = polyphenyDbConnection.getConnection();
@@ -241,6 +244,7 @@ public class ForeignKeyConstraintTest {
 
 
     @Test
+    @Ignore // todo dl enable as soon as such inserts work correctly
     public void testInsertSelectConflict() throws SQLException {
         try ( JdbcConnection polyphenyDbConnection = new JdbcConnection( true ) ) {
             Connection connection = polyphenyDbConnection.getConnection();
@@ -258,13 +262,15 @@ public class ForeignKeyConstraintTest {
 
                 try {
                     statement.executeUpdate( "INSERT INTO constraint_test VALUES (1, 1, 1, 1), (2, 2, 2, 2)" );
+                    connection.commit();
                     try {
                         statement.executeUpdate( "INSERT INTO constraint_test2 SELECT ctid + 10 AS ct2id, ctid * 2 AS ctid FROM constraint_test" );
                         Assert.fail( "Expected ConstraintViolationException was not thrown" );
                     } catch ( AvaticaSqlException e ) {
-                        if ( !e.getErrorMessage().contains( "Remote driver error: Insert violates foreign key constraint" ) ) {
+                        if ( !(e.getErrorMessage().contains( "Remote driver error:" ) && e.getErrorMessage().contains( "Insert violates foreign key constraint" )) ) {
                             throw new RuntimeException( "Unexpected exception", e );
                         }
+                        connection.rollback();
                     }
                     TestHelper.checkResultSet(
                             statement.executeQuery( "SELECT * FROM constraint_test ORDER BY ctid" ),
@@ -348,14 +354,18 @@ public class ForeignKeyConstraintTest {
 
                 try {
                     statement.executeUpdate( "INSERT INTO constraint_test VALUES (1, 1, 1, 1), (2, 2, 2, 2), (3, 3, 3, 3)" );
+                    connection.commit();
                     statement.executeUpdate( "INSERT INTO constraint_test2 VALUES (1, 1), (3, 3)" );
+                    connection.commit();
                     try {
                         statement.executeUpdate( "UPDATE constraint_test2 SET ctid = ctid + 2" );
                         Assert.fail( "Expected ConstraintViolationException was not thrown" );
                     } catch ( AvaticaSqlException e ) {
-                        if ( !e.getErrorMessage().contains( "Remote driver error: Update violates foreign key constraint" ) ) {
+                        if ( !(e.getErrorMessage().contains( "Remote driver error:" )
+                                && e.getErrorMessage().contains( "Update violates foreign key constraint" )) ) {
                             throw new RuntimeException( "Unexpected exception", e );
                         }
+                        connection.rollback();
                     }
                     TestHelper.checkResultSet(
                             statement.executeQuery( "SELECT * FROM constraint_test ORDER BY ctid" ),
@@ -443,14 +453,18 @@ public class ForeignKeyConstraintTest {
 
                 try {
                     statement.executeUpdate( "INSERT INTO constraint_test VALUES (1, 1, 1, 1), (2, 2, 2, 2), (3, 3, 3, 3)" );
+                    connection.commit();
                     statement.executeUpdate( "INSERT INTO constraint_test2 VALUES (1, 1), (3, 3)" );
+                    connection.commit();
                     try {
                         statement.executeUpdate( "UPDATE constraint_test SET ctid = 4 WHERE ctid = 1" );
                         Assert.fail( "Expected ConstraintViolationException was not thrown" );
                     } catch ( AvaticaSqlException e ) {
-                        if ( !e.getErrorMessage().contains( "Remote driver error: Update violates foreign key constraint" ) ) {
+                        if ( !(e.getErrorMessage().contains( "Remote driver error:" )
+                                && e.getErrorMessage().contains( "Update violates foreign key constraint" )) ) {
                             throw new RuntimeException( "Unexpected exception", e );
                         }
+                        connection.rollback();
                     }
                     TestHelper.checkResultSet(
                             statement.executeQuery( "SELECT * FROM constraint_test ORDER BY ctid" ),
@@ -537,14 +551,18 @@ public class ForeignKeyConstraintTest {
 
                 try {
                     statement.executeUpdate( "INSERT INTO constraint_test VALUES (1, 1, 1, 1), (2, 2, 2, 2), (3, 3, 3, 3)" );
+                    connection.commit();
                     statement.executeUpdate( "INSERT INTO constraint_test2 VALUES (1, 1), (3, 3)" );
+                    connection.commit();
                     try {
                         statement.executeUpdate( "DELETE FROM constraint_test WHERE ctid = 1" );
                         Assert.fail( "Expected ConstraintViolationException was not thrown" );
                     } catch ( AvaticaSqlException e ) {
-                        if ( !e.getErrorMessage().contains( "Remote driver error: Delete violates foreign key constraint" ) ) {
+                        if ( !(e.getErrorMessage().contains( "Remote driver error:" )
+                                && e.getErrorMessage().contains( "Delete violates foreign key constraint" )) ) {
                             throw new RuntimeException( "Unexpected exception", e );
                         }
+                        connection.rollback();
                     }
                     TestHelper.checkResultSet(
                             statement.executeQuery( "SELECT * FROM constraint_test ORDER BY ctid" ),

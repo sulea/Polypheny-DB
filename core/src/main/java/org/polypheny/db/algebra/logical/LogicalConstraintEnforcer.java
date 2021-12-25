@@ -18,8 +18,10 @@ package org.polypheny.db.algebra.logical;
 
 import com.google.common.collect.ImmutableList;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.polypheny.db.algebra.AlgNode;
@@ -27,6 +29,7 @@ import org.polypheny.db.algebra.AlgShuttle;
 import org.polypheny.db.algebra.core.BatchIterator;
 import org.polypheny.db.algebra.core.ConditionalTableModify;
 import org.polypheny.db.algebra.core.ConstraintEnforcer;
+import org.polypheny.db.algebra.core.JoinAlgType;
 import org.polypheny.db.algebra.core.TableModify;
 import org.polypheny.db.algebra.exceptions.ConstraintViolationException;
 import org.polypheny.db.algebra.operators.OperatorName;
@@ -42,15 +45,23 @@ import org.polypheny.db.catalog.exceptions.UnknownTableException;
 import org.polypheny.db.config.RuntimeConfig;
 import org.polypheny.db.languages.OperatorRegistry;
 import org.polypheny.db.plan.AlgOptCluster;
+import org.polypheny.db.plan.AlgOptSchema;
+import org.polypheny.db.plan.AlgOptTable;
 import org.polypheny.db.plan.AlgTraitSet;
+import org.polypheny.db.processing.DeepCopyShuttle;
 import org.polypheny.db.rex.RexBuilder;
 import org.polypheny.db.rex.RexInputRef;
+import org.polypheny.db.rex.RexNode;
 import org.polypheny.db.schema.LogicalTable;
 import org.polypheny.db.tools.AlgBuilder;
 import org.polypheny.db.transaction.Statement;
+import org.polypheny.db.type.PolyType;
 
 @Slf4j
 public class LogicalConstraintEnforcer extends ConstraintEnforcer {
+
+    final static String REF_POSTFIX = "$ref";
+
 
     /**
      * This class checks if after a DML operation the constraints on the involved
@@ -89,7 +100,10 @@ public class LogicalConstraintEnforcer extends ConstraintEnforcer {
         } else {
             throw new RuntimeException( "The tree did no conform, while generating the constraint enforcement query!" );
         }
-        statement.getTransaction().getId();
+
+        AlgBuilder builder = AlgBuilder.create( statement );
+        final AlgNode input = modify.getInput().accept( new DeepCopyShuttle() );
+        final RexBuilder rexBuilder = modify.getCluster().getRexBuilder();
 
         final Catalog catalog = Catalog.getInstance();
         String schemaName;
@@ -140,20 +154,17 @@ public class LogicalConstraintEnforcer extends ConstraintEnforcer {
             return new EnforcementInformation( modify, ImmutableList.of(), ImmutableList.of() );
         }
 
-        AlgNode constrainedNode = modify;
+        AlgNode constrainedNode;
 
         //
         //  Enforce UNIQUE constraints in INSERT operations
         //
+        List<AlgNode> filters = new ArrayList<>();
         int pos = 0;
         List<String> errorMessages = new ArrayList<>();
         List<Class<? extends Exception>> errorClasses = new ArrayList<>();
         if ( (modify.isInsert() || modify.isMerge() || modify.isUpdate()) && RuntimeConfig.UNIQUE_CONSTRAINT_ENFORCEMENT.getBoolean() ) {
-            AlgBuilder builder = AlgBuilder.create( statement );
-            final RexBuilder rexBuilder = builder.getRexBuilder();
             builder.scan( table.getSchemaName(), table.name );
-
-            List<AlgNode> filters = new ArrayList<>();
             for ( CatalogConstraint constraint : constraints ) {
                 builder.clear();
                 final AlgNode scan = LogicalTableScan.create( modify.getCluster(), modify.getTable() );
@@ -180,37 +191,63 @@ public class LogicalConstraintEnforcer extends ConstraintEnforcer {
                 errorClasses.add( ConstraintViolationException.class );
                 pos++;
             }
-            if ( filters.size() == 1 ) {
-                constrainedNode = filters.get( 0 );
-            } else {
-                filters.forEach( builder::push );
-                builder.union( true );
-                constrainedNode = builder.build();
-            }
         }
 
         //
         //  Enforce FOREIGN KEY constraints in INSERT operations
         //
-        if ( modify.isInsert() && RuntimeConfig.FOREIGN_KEY_ENFORCEMENT.getBoolean() ) {
-            // todo
+        if ( RuntimeConfig.FOREIGN_KEY_ENFORCEMENT.getBoolean() ) {
+            for ( final CatalogForeignKey foreignKey : Stream.concat( foreignKeys.stream(), exportedKeys.stream() ).collect( Collectors.toList() ) ) {
+                builder.clear();
+                final AlgOptSchema algOptSchema = modify.getCatalogReader();
+                final AlgOptTable scanOptTable = algOptSchema.getTableForMember( Collections.singletonList( foreignKey.getTableName() ) );
+                final AlgOptTable refOptTable = algOptSchema.getTableForMember( Collections.singletonList( foreignKey.getReferencedKeyTableName() ) );
+                final AlgNode scan = LogicalTableScan.create( modify.getCluster(), scanOptTable );
+                final LogicalTableScan ref = LogicalTableScan.create( modify.getCluster(), refOptTable );
+
+                builder.push( scan );
+                builder.project( foreignKey.getColumnNames().stream().map( builder::field ).collect( Collectors.toList() ) );
+
+                builder.push( ref );
+                builder.project( foreignKey.getReferencedKeyColumnNames().stream().map( builder::field ).collect( Collectors.toList() ) );
+
+                RexNode joinCondition = rexBuilder.makeLiteral( true );
+
+                for ( int i = 0; i < foreignKey.getColumnNames().size(); i++ ) {
+                    final String column = foreignKey.getColumnNames().get( i );
+                    final String referencedColumn = foreignKey.getReferencedKeyColumnNames().get( i );
+                    RexNode joinComparison = rexBuilder.makeCall(
+                            OperatorRegistry.get( OperatorName.EQUALS ),
+                            builder.field( 2, 1, referencedColumn ),
+                            builder.field( 2, 0, column )
+                    );
+                    joinCondition = rexBuilder.makeCall( OperatorRegistry.get( OperatorName.AND ), joinCondition, joinComparison );
+                }
+
+                final AlgNode join = builder.join( JoinAlgType.LEFT, joinCondition ).build();
+                //builder.project( builder.fields() );
+                builder.push( LogicalFilter.create( join, rexBuilder.makeCall( OperatorRegistry.get( OperatorName.IS_NULL ), rexBuilder.makeInputRef( join, join.getRowType().getFieldCount() - 1 ) ) ) );
+                builder.project( builder.field( foreignKey.getColumnNames().get( 0 ) ) );
+                builder.rename( Collections.singletonList( "count" ) );
+                builder.project( builder.cast( builder.field( "count" ), PolyType.BIGINT ), builder.literal( pos ) );
+
+                filters.add( builder.build() );
+                String type = modify.isInsert() ? "Insert" : modify.isUpdate() ? "Update" : modify.isMerge() ? "Merge" : modify.isDelete() ? "Delete" : null;
+                errorMessages.add( String.format( "%s violates foreign key constraint `%s`.`%s`", type, table.name, foreignKey.name ) );
+                errorClasses.add( ConstraintViolationException.class );
+                pos++;
+            }
         }
 
-        //
-        //  Enforce FOREIGN KEY constraints in UPDATE operations
-        //
-        if ( (modify.isUpdate() || modify.isMerge()) && RuntimeConfig.FOREIGN_KEY_ENFORCEMENT.getBoolean() ) {
-            // todo
-        }
-
-        //
-        //  Enforce reverse FOREIGN KEY constraints in UPDATE and DELETE operations
-        //
-        if ( (modify.isDelete() || modify.isUpdate() || modify.isMerge()) && RuntimeConfig.FOREIGN_KEY_ENFORCEMENT.getBoolean() ) {
-            // todo
-        }
-        if ( constrainedNode instanceof TableModify ) {
+        if ( filters.size() == 0 ) {
             throw new RuntimeException( "Constrained node was not correctly set!" );
+        }
+        if ( filters.size() == 1 ) {
+            constrainedNode = filters.get( 0 );
+        } else {
+            filters.forEach( builder::push );
+            builder.union( true );
+            constrainedNode = builder.build();
         }
 
         // todo dl add missing tree ui
