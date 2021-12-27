@@ -23,7 +23,7 @@ import org.polypheny.db.algebra.AlgNode;
 import org.polypheny.db.algebra.AlgRoot;
 import org.polypheny.db.algebra.AlgShuttleImpl;
 import org.polypheny.db.algebra.constant.Kind;
-import org.polypheny.db.algebra.core.Project;
+import org.polypheny.db.algebra.core.JoinAlgType;
 import org.polypheny.db.algebra.core.TableModify;
 import org.polypheny.db.algebra.logical.LogicalBatchIterator;
 import org.polypheny.db.algebra.logical.LogicalConditionalExecute;
@@ -32,10 +32,10 @@ import org.polypheny.db.algebra.logical.LogicalConstraintEnforcer;
 import org.polypheny.db.algebra.logical.LogicalJoin;
 import org.polypheny.db.algebra.logical.LogicalTableModify;
 import org.polypheny.db.algebra.operators.OperatorName;
-import org.polypheny.db.algebra.type.AlgDataTypeField;
 import org.polypheny.db.languages.OperatorRegistry;
 import org.polypheny.db.rex.RexBuilder;
 import org.polypheny.db.rex.RexCall;
+import org.polypheny.db.rex.RexInputRef;
 import org.polypheny.db.rex.RexNode;
 import org.polypheny.db.tools.AlgBuilder;
 import org.polypheny.db.transaction.Statement;
@@ -131,33 +131,42 @@ public class EnumerableAdjuster {
 
             List<RexNode> operands = ((RexCall) join.getCondition()).operands;
             // extract underlying right operators which compare left to right
-            List<RexNode> projects = ((Project) right).getProjects();
 
+            return preRouteOneSide( join, builder, rexBuilder, left, right, operands );
+        }
+
+
+        private AlgNode preRouteOneSide( LogicalJoin join, AlgBuilder builder, RexBuilder rexBuilder, AlgNode left, AlgNode right, List<RexNode> operands ) {
+            boolean preRouteRight = join.getJoinType() != JoinAlgType.LEFT;
+            int ordinal = ((RexInputRef) operands.get( 1 )).getIndex() - left.getRowType().getFieldCount();
+            if ( !preRouteRight ) {
+                ordinal = ((RexInputRef) operands.get( 0 )).getIndex();
+            }
             AlgNode projectedRight = builder
-                    .push( right )
-                    .project( builder.field( projects.indexOf( operands.get( 1 ) ) - 1 ) )
+                    .push( preRouteRight ? right : left )
+                    .project( builder.field( ordinal ) )
                     .build();
 
             PolyResult result = queryProcessor.prepareQuery( AlgRoot.of( projectedRight, Kind.SELECT ), false );
             List<List<Object>> rows = result.getRows( statement, -1 );
 
-            builder.push( left );
+            builder.push( preRouteRight ? left : right );
 
             List<RexNode> nodes = new ArrayList<>();
-            RexNode leftComp = operands.get( 0 );
-            List<AlgDataTypeField> fields = right.getRowType().getFieldList();
+            RexNode leftComp = operands.get( preRouteRight ? 0 : 1 );
 
             for ( List<Object> row : rows ) {
-                int i = 0;
                 List<RexNode> ands = new ArrayList<>();
                 for ( Object o : row ) {
-
+                    int index = ((RexInputRef) leftComp).getIndex();
+                    if ( !preRouteRight ) {
+                        index = ((RexInputRef) operands.get( 1 )).getIndex() - left.getRowType().getFieldCount();
+                    }
                     ands.add(
                             rexBuilder.makeCall(
                                     OperatorRegistry.get( OperatorName.EQUALS ),
-                                    builder.field( ((Project) left).getProjects().indexOf( leftComp ) ),
+                                    builder.field( index ),
                                     rexBuilder.makeLiteral( o, leftComp.getType(), false ) ) );
-                    i++;
                 }
                 if ( ands.size() > 1 ) {
                     nodes.add( rexBuilder.makeCall( OperatorRegistry.get( OperatorName.AND ), ands ) );
@@ -165,13 +174,14 @@ public class EnumerableAdjuster {
                     nodes.add( ands.get( 0 ) );
                 }
             }
+            AlgNode prepared;
             if ( nodes.size() > 1 ) {
-                left = builder.filter( rexBuilder.makeCall( OperatorRegistry.get( OperatorName.OR ), nodes ) ).build();
+                prepared = builder.filter( rexBuilder.makeCall( OperatorRegistry.get( OperatorName.OR ), nodes ) ).build();
             } else {
-                left = builder.filter( nodes.get( 0 ) ).build();
+                prepared = builder.filter( nodes.get( 0 ) ).build();
             }
-            builder.push( left );
-            builder.push( right );
+            builder.push( preRouteRight ? prepared : left );
+            builder.push( preRouteRight ? right : prepared );
             builder.join( join.getJoinType(), join.getCondition() );
             return builder.build();
         }

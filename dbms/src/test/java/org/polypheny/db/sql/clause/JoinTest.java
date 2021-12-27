@@ -57,6 +57,10 @@ public class JoinTest {
                 statement.executeUpdate( "INSERT INTO TableA VALUES ('Bc', 'Name2',  5000.00)" );
                 statement.executeUpdate( "INSERT INTO TableA VALUES ('Cd', 'Name3',  7000.00)" );
 
+                statement.executeUpdate( "CREATE TABLE TableB(ID VARCHAR(255) NOT NULL, SALARY INTEGER, IDB VARCHAR(255) NOT NULL, PRIMARY KEY (ID))" );
+                statement.executeUpdate( "INSERT INTO TableB VALUES ('Ab', 400.00, 'Ab')" );
+                statement.executeUpdate( "INSERT INTO TableB VALUES ('Cd',  20.00, 'Ab')" );
+                statement.executeUpdate( "INSERT INTO TableB VALUES ('De',  7.00, 'De')" );
                 connection.commit();
             }
         }
@@ -69,6 +73,7 @@ public class JoinTest {
             Connection connection = jdbcConnection.getConnection();
             try ( Statement statement = connection.createStatement() ) {
                 statement.executeUpdate( "DROP TABLE TableA" );
+                statement.executeUpdate( "DROP TABLE TableB" );
             }
             connection.commit();
         }
@@ -97,6 +102,24 @@ public class JoinTest {
 
 
     @Test
+    public void naturalTwoTableJoinTests() throws SQLException {
+        try ( TestHelper.JdbcConnection polyphenyDbConnection = new TestHelper.JdbcConnection( true ) ) {
+            Connection connection = polyphenyDbConnection.getConnection();
+            try ( Statement statement = connection.createStatement() ) {
+                List<Object[]> expectedResult = ImmutableList.of(
+                        new Object[]{ "Ab", "Name1", 10000, 400, "Ab" },
+                        new Object[]{ "Cd", "Name3", 7000, 20, "Ab" }
+                );
+                TestHelper.checkResultSet(
+                        statement.executeQuery( "SELECT * FROM TableA NATURAL JOIN (SELECT *  FROM TableB)" ),
+                        expectedResult,
+                        true );
+            }
+        }
+    }
+
+
+    @Test
     public void innerJoinTest() throws SQLException {
         try ( TestHelper.JdbcConnection polyphenyDbConnection = new TestHelper.JdbcConnection( true ) ) {
             Connection connection = polyphenyDbConnection.getConnection();
@@ -108,6 +131,24 @@ public class JoinTest {
                 );
                 TestHelper.checkResultSet(
                         statement.executeQuery( "SELECT * FROM (SELECT id, name FROM TableA) AS S INNER JOIN (SELECT name, Amount  FROM TableA) AS T ON S.name = T.name" ),
+                        expectedResult,
+                        true );
+            }
+        }
+    }
+
+
+    @Test
+    public void innerTwoTableJoinTests() throws SQLException {
+        try ( TestHelper.JdbcConnection polyphenyDbConnection = new TestHelper.JdbcConnection( true ) ) {
+            Connection connection = polyphenyDbConnection.getConnection();
+            try ( Statement statement = connection.createStatement() ) {
+                List<Object[]> expectedResult = ImmutableList.of(
+                        new Object[]{ "Ab", "Name1", 10000, "Ab", 400, "Ab" },
+                        new Object[]{ "Ab", "Name1", 10000, "Cd", 20, "Ab" }
+                );
+                TestHelper.checkResultSet(
+                        statement.executeQuery( "SELECT * FROM ( SELECT * FROM TableA) AS A INNER JOIN (SELECT * FROM TableB) AS B ON A.id = B.idb" ),
                         expectedResult,
                         true );
             }
@@ -135,6 +176,25 @@ public class JoinTest {
 
 
     @Test
+    public void leftTwoJoinTest() throws SQLException {
+        try ( TestHelper.JdbcConnection polyphenyDbConnection = new TestHelper.JdbcConnection( true ) ) {
+            Connection connection = polyphenyDbConnection.getConnection();
+            try ( Statement statement = connection.createStatement() ) {
+                List<Object[]> expectedResult = ImmutableList.of(
+                        new Object[]{ "Ab", "Name1", 10000, "Ab", 400, "Ab" },
+                        new Object[]{ "Bc", "Name2", 5000, null, null, null },
+                        new Object[]{ "Cd", "Name3", 7000, "Cd", 20, "Ab" }
+                );
+                TestHelper.checkResultSet(
+                        statement.executeQuery( "SELECT * FROM (SELECT * FROM TableA) AS S LEFT JOIN (SELECT *  FROM TableB) AS T ON S.id = T.id" ),
+                        expectedResult,
+                        true );
+            }
+        }
+    }
+
+
+    @Test
     // todo dl, rewrite this test
     public void rightJoinTest() throws SQLException {
         try ( TestHelper.JdbcConnection polyphenyDbConnection = new TestHelper.JdbcConnection( true ) ) {
@@ -147,6 +207,26 @@ public class JoinTest {
                 );
                 TestHelper.checkResultSet(
                         statement.executeQuery( "SELECT * FROM (SELECT id, name FROM TableA) AS S RIGHT JOIN (SELECT name, Amount  FROM TableA) AS T ON S.name = T.name" ),
+                        expectedResult,
+                        true );
+            }
+        }
+    }
+
+
+    @Test
+    // todo dl, rewrite this test
+    public void rightTwoJoinTest() throws SQLException {
+        try ( TestHelper.JdbcConnection polyphenyDbConnection = new TestHelper.JdbcConnection( true ) ) {
+            Connection connection = polyphenyDbConnection.getConnection();
+            try ( Statement statement = connection.createStatement() ) {
+                List<Object[]> expectedResult = ImmutableList.of(
+                        new Object[]{ "Ab", "Name1", 10000, "Ab", 400, "Ab" },
+                        new Object[]{ "Cd", "Name3", 7000, "Cd", 20, "Ab" },
+                        new Object[]{ null, null, null, "De", 7, "De" }
+                );
+                TestHelper.checkResultSet(
+                        statement.executeQuery( "SELECT * FROM (SELECT * FROM TableA) AS S RIGHT JOIN (SELECT * FROM TableB) AS T ON S.id = T.id" ),
                         expectedResult,
                         true );
             }
