@@ -45,6 +45,7 @@ import org.polypheny.db.algebra.AlgNodes;
 import org.polypheny.db.algebra.InvalidAlgException;
 import org.polypheny.db.algebra.core.CorrelationId;
 import org.polypheny.db.algebra.core.EquiJoin;
+import org.polypheny.db.algebra.core.Join;
 import org.polypheny.db.algebra.core.JoinAlgType;
 import org.polypheny.db.algebra.core.JoinInfo;
 import org.polypheny.db.algebra.metadata.AlgMdCollation;
@@ -60,7 +61,7 @@ import org.polypheny.db.util.Util;
 
 
 /**
- * Implementation of {@link org.polypheny.db.algebra.core.Join} in {@link org.polypheny.db.adapter.enumerable.EnumerableConvention enumerable calling convention}.
+ * Implementation of {@link Join} in {@link EnumerableConvention enumerable calling convention}.
  */
 public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
 

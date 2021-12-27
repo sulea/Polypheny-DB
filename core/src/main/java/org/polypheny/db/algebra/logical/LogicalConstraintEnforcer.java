@@ -55,7 +55,6 @@ import org.polypheny.db.rex.RexNode;
 import org.polypheny.db.schema.LogicalTable;
 import org.polypheny.db.tools.AlgBuilder;
 import org.polypheny.db.transaction.Statement;
-import org.polypheny.db.type.PolyType;
 
 @Slf4j
 public class LogicalConstraintEnforcer extends ConstraintEnforcer {
@@ -184,7 +183,7 @@ public class LogicalConstraintEnforcer extends ConstraintEnforcer {
 
                 builder.filter( builder.call( OperatorRegistry.get( OperatorName.GREATER_THAN ), builder.field( "count" ), builder.literal( 1 ) ) );
                 // we attach constant to later retrieve the corresponding constraint, which was violated
-                builder.project( builder.field( "count" ), builder.literal( pos ) );
+                builder.projectPlus( builder.literal( pos ) );
                 filters.add( builder.build() );
                 String type = modify.isInsert() ? "Insert" : modify.isUpdate() ? "Update" : modify.isMerge() ? "Merge" : null;
                 errorMessages.add( String.format( "%s violates unique constraint `%s`.`%s`", type, table.name, constraint.name ) );
@@ -229,7 +228,7 @@ public class LogicalConstraintEnforcer extends ConstraintEnforcer {
                 builder.push( LogicalFilter.create( join, rexBuilder.makeCall( OperatorRegistry.get( OperatorName.IS_NULL ), rexBuilder.makeInputRef( join, join.getRowType().getFieldCount() - 1 ) ) ) );
                 builder.project( builder.field( foreignKey.getColumnNames().get( 0 ) ) );
                 builder.rename( Collections.singletonList( "count" ) );
-                builder.project( builder.cast( builder.field( "count" ), PolyType.BIGINT ), builder.literal( pos ) );
+                builder.projectPlus( builder.literal( pos ) );
 
                 filters.add( builder.build() );
                 String type = modify.isInsert() ? "Insert" : modify.isUpdate() ? "Update" : modify.isMerge() ? "Merge" : modify.isDelete() ? "Delete" : null;

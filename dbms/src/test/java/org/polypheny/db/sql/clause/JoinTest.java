@@ -135,6 +135,7 @@ public class JoinTest {
 
 
     @Test
+    // todo dl, rewrite this test
     public void rightJoinTest() throws SQLException {
         try ( TestHelper.JdbcConnection polyphenyDbConnection = new TestHelper.JdbcConnection( true ) ) {
             Connection connection = polyphenyDbConnection.getConnection();

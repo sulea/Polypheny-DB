@@ -255,7 +255,6 @@ public abstract class AbstractQueryProcessor implements QueryProcessor, Executio
         List<AlgRoot> parameterizedRootList = new ArrayList<>();
         List<PolyResult> results = new ArrayList<>();
         List<String> generatedCodes = new ArrayList<>();
-        List<AlgRoot> updates = new ArrayList<>();
 
         //
         // Check for view
@@ -358,6 +357,8 @@ public abstract class AbstractQueryProcessor implements QueryProcessor, Executio
                 statement.getProcessingDuration().stop( "Constraint Enforcement" );
                 statement.getProcessingDuration().start( "Index Lookup Rewrite" );
             }
+
+            constraintsRoot = EnumerableAdjuster.prerouteJoins( constraintsRoot, statement, this );
 
             if ( constraintsRoot.kind == Kind.UPDATE && EnumerableAdjuster.needsAdjustment( constraintsRoot.alg ) ) {
                 constraintsRoot = EnumerableAdjuster.adjustModify( constraintsRoot, statement );
