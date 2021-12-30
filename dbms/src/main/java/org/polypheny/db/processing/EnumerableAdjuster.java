@@ -129,15 +129,20 @@ public class EnumerableAdjuster {
             AlgNode left = join.getLeft().accept( this );
             AlgNode right = join.getRight().accept( this );
 
-            List<RexNode> operands = ((RexCall) join.getCondition()).operands;
+            if ( join.getCondition() instanceof RexCall ) {
+                List<RexNode> operands = ((RexCall) join.getCondition()).operands;
+                return preRouteOneSide( join, builder, rexBuilder, left, right, operands );
+            }
+            join.replaceInput( 0, left );
+            join.replaceInput( 1, right );
+            return join;
             // extract underlying right operators which compare left to right
-
-            return preRouteOneSide( join, builder, rexBuilder, left, right, operands );
         }
 
 
         private AlgNode preRouteOneSide( LogicalJoin join, AlgBuilder builder, RexBuilder rexBuilder, AlgNode left, AlgNode right, List<RexNode> operands ) {
-            boolean preRouteRight = join.getJoinType() != JoinAlgType.LEFT;
+            boolean preRouteRight = join.getJoinType() != JoinAlgType.LEFT
+                    || (join.getJoinType() == JoinAlgType.INNER && left.getTable().getRowCount() < right.getTable().getRowCount());
             int ordinal = ((RexInputRef) operands.get( 1 )).getIndex() - left.getRowType().getFieldCount();
             if ( !preRouteRight ) {
                 ordinal = ((RexInputRef) operands.get( 0 )).getIndex();
