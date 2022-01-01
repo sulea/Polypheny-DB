@@ -18,6 +18,9 @@ package org.polypheny.db.processing;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
+import lombok.Getter;
 import org.polypheny.db.PolyResult;
 import org.polypheny.db.algebra.AlgNode;
 import org.polypheny.db.algebra.AlgRoot;
@@ -37,6 +40,7 @@ import org.polypheny.db.rex.RexBuilder;
 import org.polypheny.db.rex.RexCall;
 import org.polypheny.db.rex.RexInputRef;
 import org.polypheny.db.rex.RexNode;
+import org.polypheny.db.rex.RexShuttle;
 import org.polypheny.db.tools.AlgBuilder;
 import org.polypheny.db.transaction.Statement;
 
@@ -143,35 +147,37 @@ public class EnumerableAdjuster {
         private AlgNode preRouteOneSide( LogicalJoin join, AlgBuilder builder, RexBuilder rexBuilder, AlgNode left, AlgNode right, List<RexNode> operands ) {
             boolean preRouteRight = join.getJoinType() != JoinAlgType.LEFT
                     || (join.getJoinType() == JoinAlgType.INNER && left.getTable().getRowCount() < right.getTable().getRowCount());
-            int ordinal = ((RexInputRef) operands.get( 1 )).getIndex() - left.getRowType().getFieldCount();
-            if ( !preRouteRight ) {
-                ordinal = ((RexInputRef) operands.get( 0 )).getIndex();
-            }
-            AlgNode projectedRight = builder
-                    .push( preRouteRight ? right : left )
-                    .project( builder.field( ordinal ) )
-                    .build();
 
-            PolyResult result = queryProcessor.prepareQuery( AlgRoot.of( projectedRight, Kind.SELECT ), false );
+            // potentially try to use the more restrictive side or do a cost model depending on a mix of size and restrictions
+            ConditionExtractor extractor = new ConditionExtractor( preRouteRight, rexBuilder, left.getRowType().getFieldCount() );
+
+            builder.push( preRouteRight ? right : left );
+
+            join.accept( extractor );
+            if ( extractor.filters.size() > 0 ) {
+                builder.filter( extractor.getFilters() );
+            }
+
+            builder.project( extractor.getProjects() );
+
+            PolyResult result = queryProcessor.prepareQuery( AlgRoot.of( builder.build(), Kind.SELECT ), false );
             List<List<Object>> rows = result.getRows( statement, -1 );
 
             builder.push( preRouteRight ? left : right );
 
             List<RexNode> nodes = new ArrayList<>();
-            RexNode leftComp = operands.get( preRouteRight ? 0 : 1 );
 
             for ( List<Object> row : rows ) {
                 List<RexNode> ands = new ArrayList<>();
+                int pos = 0;
                 for ( Object o : row ) {
-                    int index = ((RexInputRef) leftComp).getIndex();
-                    if ( !preRouteRight ) {
-                        index = ((RexInputRef) operands.get( 1 )).getIndex() - left.getRowType().getFieldCount();
-                    }
+                    RexInputRef ref = extractor.otherProjects.get( pos );
                     ands.add(
                             rexBuilder.makeCall(
                                     OperatorRegistry.get( OperatorName.EQUALS ),
-                                    builder.field( index ),
-                                    rexBuilder.makeLiteral( o, leftComp.getType(), false ) ) );
+                                    builder.field( ref.getIndex() ),
+                                    rexBuilder.makeLiteral( o, ref.getType(), false ) ) );
+                    pos++;
                 }
                 if ( ands.size() > 1 ) {
                     nodes.add( rexBuilder.makeCall( OperatorRegistry.get( OperatorName.AND ), ands ) );
@@ -189,6 +195,84 @@ public class EnumerableAdjuster {
             builder.push( preRouteRight ? right : prepared );
             builder.join( join.getJoinType(), join.getCondition() );
             return builder.build();
+        }
+
+
+        private static class ConditionExtractor extends RexShuttle {
+
+            private final boolean preRouteRight;
+            private final RexBuilder rexBuilder;
+            private final long leftSize;
+
+            @Getter
+            private final List<RexNode> filters = new ArrayList<>();
+            @Getter
+            private final List<RexInputRef> projects = new ArrayList<>();
+            @Getter
+            private final List<RexInputRef> otherProjects = new ArrayList<>();
+
+
+            public ConditionExtractor( boolean preRouteRight, RexBuilder rexBuilder, long leftSize ) {
+                this.preRouteRight = preRouteRight;
+                this.rexBuilder = rexBuilder;
+                this.leftSize = leftSize;
+            }
+
+
+            @Override
+            public RexNode visitInputRef( RexInputRef inputRef ) {
+                RexInputRef project = null;
+                RexInputRef otherProject = null;
+
+                if ( inputRef.getIndex() >= leftSize ) {
+                    // is from right
+                    if ( preRouteRight ) {
+                        project = rexBuilder.makeInputRef( inputRef.getType(), (int) (inputRef.getIndex() - leftSize) );
+                    } else {
+                        // add not routed ref into other projection collection to use it after
+                        otherProject = rexBuilder.makeInputRef( inputRef.getType(), (int) (inputRef.getIndex() - leftSize) );
+                    }
+                } else {
+                    // is from left
+                    if ( !preRouteRight ) {
+                        project = rexBuilder.makeInputRef( inputRef.getType(), inputRef.getIndex() );
+                    } else {
+                        otherProject = rexBuilder.makeInputRef( inputRef.getType(), inputRef.getIndex() );
+                    }
+                }
+
+                if ( project != null ) {
+                    projects.add( project );
+                }
+                if ( otherProject != null ) {
+                    otherProjects.add( otherProject );
+                }
+
+                return project;
+            }
+
+
+            @Override
+            public RexNode visitCall( RexCall call ) {
+                List<RexNode> nodes = call.operands.stream().map( c -> c.accept( this ) ).filter( Objects::nonNull ).collect( Collectors.toList() );
+
+                if ( nodes.size() == 1 ) {
+                    return nodes.get( 0 );
+                } else if ( nodes.size() == 0 ) {
+                    return null;
+                }
+
+                switch ( call.op.getOperatorName() ) {
+                    case EQUALS:
+                    case NOT_EQUALS:
+                        filters.add( rexBuilder.makeCall( call.op, nodes ) );
+                    case AND:
+                    case OR:
+                    default:
+                        return call;
+                }
+            }
+
         }
 
     }

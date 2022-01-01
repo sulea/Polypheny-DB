@@ -176,12 +176,11 @@ public class LogicalConstraintEnforcer extends ConstraintEnforcer {
                         .collect( Collectors.toList() );
                 builder.project( keys );
 
-                builder.aggregate( builder.groupKey( builder.fields() ), builder.aggregateCall( OperatorRegistry.getAgg( OperatorName.COUNT ) ).as( "count" ) );
-                if ( keys.size() > 1 ) {
-                    builder.project( builder.field( "count" ) );
-                }
+                builder.aggregate( builder.groupKey( builder.fields() ), builder.aggregateCall( OperatorRegistry.getAgg( OperatorName.COUNT ) ).as( "count$" + pos ) );
 
-                builder.filter( builder.call( OperatorRegistry.get( OperatorName.GREATER_THAN ), builder.field( "count" ), builder.literal( 1 ) ) );
+                builder.project( builder.field( "count$" + pos ) );
+
+                builder.filter( builder.call( OperatorRegistry.get( OperatorName.GREATER_THAN ), builder.field( "count$" + pos ), builder.literal( 1 ) ) );
                 // we attach constant to later retrieve the corresponding constraint, which was violated
                 builder.projectPlus( builder.literal( pos ) );
                 filters.add( builder.build() );
@@ -227,7 +226,7 @@ public class LogicalConstraintEnforcer extends ConstraintEnforcer {
                 //builder.project( builder.fields() );
                 builder.push( LogicalFilter.create( join, rexBuilder.makeCall( OperatorRegistry.get( OperatorName.IS_NULL ), rexBuilder.makeInputRef( join, join.getRowType().getFieldCount() - 1 ) ) ) );
                 builder.project( builder.field( foreignKey.getColumnNames().get( 0 ) ) );
-                builder.rename( Collections.singletonList( "count" ) );
+                builder.rename( Collections.singletonList( "count$" + pos ) );
                 builder.projectPlus( builder.literal( pos ) );
 
                 filters.add( builder.build() );

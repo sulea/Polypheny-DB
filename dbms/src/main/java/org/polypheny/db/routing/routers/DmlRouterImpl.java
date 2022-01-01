@@ -730,7 +730,15 @@ public class DmlRouterImpl extends BaseRouter implements DmlRouter {
         RoutedAlgBuilder builder = RoutedAlgBuilder.create( statement, alg.getCluster() );
         builder = RoutingManager.getInstance().getFallbackRouter().routeFirst( lce.getQuery(), builder, statement, alg.getCluster(), queryInformation );
 
-        return LogicalConditionalTableModify.create( routeDml( lce.getModify(), statement ), builder.build(), routeDml( lce.getPrepared(), statement ) );
+        // todo dl catch partitioning for now this way
+        try {
+            return LogicalConditionalTableModify.create( routeDml( lce.getModify(), statement ), builder.build(), routeDml( lce.getPrepared(), statement ) );
+        } catch ( RuntimeException e ) {
+            builder.clear();
+            builder = RoutingManager.getInstance().getFallbackRouter().routeFirst( lce.getQuery(), builder, statement, alg.getCluster(), queryInformation );
+
+            return LogicalConditionalTableModify.create( lce.getModify(), builder.build(), routeDml( lce.getPrepared(), statement ) );
+        }
     }
 
 
