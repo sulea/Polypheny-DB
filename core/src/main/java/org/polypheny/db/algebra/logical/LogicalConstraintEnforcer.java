@@ -19,7 +19,9 @@ package org.polypheny.db.algebra.logical;
 import com.google.common.collect.ImmutableList;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Queue;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.Getter;
@@ -158,7 +160,7 @@ public class LogicalConstraintEnforcer extends ConstraintEnforcer {
         //
         //  Enforce UNIQUE constraints in INSERT operations
         //
-        List<AlgNode> filters = new ArrayList<>();
+        Queue<AlgNode> filters = new LinkedList<>();
         int pos = 0;
         List<String> errorMessages = new ArrayList<>();
         List<Class<? extends Exception>> errorClasses = new ArrayList<>();
@@ -241,15 +243,33 @@ public class LogicalConstraintEnforcer extends ConstraintEnforcer {
             throw new RuntimeException( "Constrained node was not correctly set!" );
         }
         if ( filters.size() == 1 ) {
-            constrainedNode = filters.get( 0 );
-        } else {
+            constrainedNode = filters.poll();
+        } else if ( filters.size() == 2 ) {
             filters.forEach( builder::push );
             builder.union( true );
             constrainedNode = builder.build();
+        } else {
+            builder.clear();
+            constrainedNode = mergeFilter( filters, builder );
         }
 
         // todo dl add missing tree ui
         return new EnforcementInformation( constrainedNode, errorClasses, errorMessages );
+    }
+
+
+    private static AlgNode mergeFilter( Queue<AlgNode> filters, AlgBuilder builder ) {
+        if ( filters.size() >= 2 ) {
+            builder.push( filters.poll() );
+            builder.push( filters.poll() );
+            filters.add( builder.union( true ).build() );
+
+            return mergeFilter( filters, builder );
+        } else if ( filters.size() == 1 ) {
+            return filters.poll();
+        } else {
+            throw new RuntimeException( "Merging the Constraint was not possible." );
+        }
     }
 
 

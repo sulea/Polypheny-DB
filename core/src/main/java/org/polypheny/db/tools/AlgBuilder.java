@@ -348,6 +348,18 @@ public class AlgBuilder {
 
 
     /**
+     * Adds an alg node to the top of the stack while preserving the field names and aliases.
+     */
+    public void replaceTop( AlgNode node, int amount ) {
+        final Frame frame = stack.peek();
+        for ( int i = 0; i < amount; i++ ) {
+            stack.pop();
+        }
+        stack.push( new Frame( node, frame.fields ) );
+    }
+
+
+    /**
      * Pushes a collection of relational expressions.
      */
     public AlgBuilder pushAll( Iterable<? extends AlgNode> nodes ) {

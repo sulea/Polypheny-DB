@@ -32,7 +32,6 @@ import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.polypheny.db.algebra.AlgNode;
 import org.polypheny.db.algebra.core.JoinAlgType;
-import org.polypheny.db.algebra.core.Union;
 import org.polypheny.db.algebra.logical.LogicalDocuments;
 import org.polypheny.db.algebra.logical.LogicalValues;
 import org.polypheny.db.algebra.operators.OperatorName;
@@ -117,13 +116,9 @@ public abstract class BaseRouter {
             builders.forEach(
                     builder -> builder.replaceTop( node.copy( node.getTraitSet(), ImmutableList.of( builder.peek( 0 ) ) ) )
             );
-        } else if ( node instanceof Union ) { // todo dl, this seems to be an error with unions, but is this limited to only union?
-            builders.forEach(
-                    builder -> builder.replaceTop( node.copy( node.getTraitSet(), ImmutableList.of( builder.peek( builder.stackSize() - 1 ), builder.peek( 0 ) ) ) )
-            );
         } else if ( node.getInputs().size() == 2 ) { // Joins, SetOperations
             builders.forEach(
-                    builder -> builder.replaceTop( node.copy( node.getTraitSet(), ImmutableList.of( builder.peek( 1 ), builder.peek( 0 ) ) ) )
+                    builder -> builder.replaceTop( node.copy( node.getTraitSet(), ImmutableList.of( builder.peek( 1 ), builder.peek( 0 ) ) ), 2 )
             );
         } else if ( node.getInputs().size() == 3 ) { // ConditionalTableModify
             builders.forEach(

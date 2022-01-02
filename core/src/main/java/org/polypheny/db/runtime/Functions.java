@@ -344,7 +344,9 @@ public class Functions {
             return Linq4j.asEnumerable( results );
         } else {
             // force rollback
-            throw new ConstraintViolationException( Joiner.on( "\n" ).join( msgs ) );
+            throw new ConstraintViolationException( Joiner.on( "\n" )
+                    .join(
+                            validationIndexes.stream().map( msgs::get ).collect( Collectors.toList() ) ) );
         }
     }
 

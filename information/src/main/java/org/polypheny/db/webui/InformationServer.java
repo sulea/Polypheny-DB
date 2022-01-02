@@ -140,7 +140,7 @@ public class InformationServer implements InformationObserver {
 
 
     public void getEnabledPlugins( final Context ctx ) {
-        ctx.json( Collections.singletonList( "Explore-By-Example" ) );
+        ctx.json( Collections.emptyList() );
     }
 
 
