@@ -19,6 +19,7 @@ package org.polypheny.db.processing;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.Getter;
 import org.polypheny.db.PolyResult;
@@ -26,15 +27,19 @@ import org.polypheny.db.algebra.AlgNode;
 import org.polypheny.db.algebra.AlgRoot;
 import org.polypheny.db.algebra.AlgShuttleImpl;
 import org.polypheny.db.algebra.constant.Kind;
+import org.polypheny.db.algebra.core.BatchIterator;
+import org.polypheny.db.algebra.core.ConditionalTableModify;
 import org.polypheny.db.algebra.core.JoinAlgType;
 import org.polypheny.db.algebra.core.TableModify;
 import org.polypheny.db.algebra.logical.LogicalBatchIterator;
 import org.polypheny.db.algebra.logical.LogicalConditionalExecute;
 import org.polypheny.db.algebra.logical.LogicalConditionalTableModify;
 import org.polypheny.db.algebra.logical.LogicalConstraintEnforcer;
+import org.polypheny.db.algebra.logical.LogicalConstraintEnforcer.EnforcementInformation;
 import org.polypheny.db.algebra.logical.LogicalJoin;
 import org.polypheny.db.algebra.logical.LogicalTableModify;
 import org.polypheny.db.algebra.operators.OperatorName;
+import org.polypheny.db.catalog.entity.CatalogTable;
 import org.polypheny.db.languages.OperatorRegistry;
 import org.polypheny.db.rex.RexBuilder;
 import org.polypheny.db.rex.RexCall;
@@ -89,6 +94,32 @@ public class EnumerableAdjuster {
     }
 
 
+    public static void attachConstraint( AlgNode node, Statement statement ) {
+        TableModify modify;
+        // todo maybe use shuttle?
+        if ( node instanceof TableModify ) {
+            modify = (TableModify) node;
+        } else if ( node instanceof BatchIterator ) {
+            if ( node.getInput( 0 ) instanceof TableModify ) {
+                modify = (TableModify) node.getInput( 0 );
+            } else if ( node.getInput( 0 ) instanceof ConditionalTableModify ) {
+                modify = (TableModify) ((ConditionalTableModify) node.getInput( 0 )).getModify();
+            } else {
+                throw new RuntimeException( "The tree did no conform, while generating the constraint enforcement query!" );
+            }
+
+        } else {
+            throw new RuntimeException( "The tree did no conform, while generating the constraint enforcement query!" );
+        }
+        statement.getTransaction().getCatalogTables().add( LogicalConstraintEnforcer.getCatalogTable( modify ) );
+    }
+
+
+    public static List<EnforcementInformation> getConstraintAlg( Set<CatalogTable> catalogTables, Statement statement ) {
+        return catalogTables.stream().map( t -> LogicalConstraintEnforcer.getControl( t, statement ) ).collect( Collectors.toList() );
+    }
+
+
     private static class ModifyAdjuster extends AlgShuttleImpl {
 
         private final Statement statement;
@@ -126,7 +157,7 @@ public class EnumerableAdjuster {
 
 
         @Override
-        // todo dl, rewrite extremely prototypy
+        // todo dl, rewrite extremely prototypey
         public AlgNode visit( LogicalJoin join ) {
             AlgBuilder builder = AlgBuilder.create( statement );
             RexBuilder rexBuilder = builder.getRexBuilder();
@@ -188,8 +219,11 @@ public class EnumerableAdjuster {
             AlgNode prepared;
             if ( nodes.size() > 1 ) {
                 prepared = builder.filter( rexBuilder.makeCall( OperatorRegistry.get( OperatorName.OR ), nodes ) ).build();
-            } else {
+            } else if ( nodes.size() == 1 ) {
                 prepared = builder.filter( nodes.get( 0 ) ).build();
+            } else {
+                // there seems to be nothing in the pre-routed side, maybe we use an empty values?
+                prepared = preRouteRight ? left : right;
             }
             builder.push( preRouteRight ? prepared : left );
             builder.push( preRouteRight ? right : prepared );

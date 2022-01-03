@@ -369,7 +369,8 @@ public abstract class AbstractQueryProcessor implements QueryProcessor, Executio
             }
 
             if ( constraintsRoot.kind.belongsTo( Kind.DML ) && (RuntimeConfig.UNIQUE_CONSTRAINT_ENFORCEMENT.getBoolean() || RuntimeConfig.FOREIGN_KEY_ENFORCEMENT.getBoolean()) ) {
-                constraintsRoot = EnumerableAdjuster.adjustConstraint( constraintsRoot, statement );
+                EnumerableAdjuster.attachConstraint( constraintsRoot.alg, statement );
+                //constraintsRoot = EnumerableAdjuster.adjustConstraint( constraintsRoot, statement );
             }
 
             AlgRoot indexLookupRoot = constraintsRoot;
@@ -388,9 +389,9 @@ public abstract class AbstractQueryProcessor implements QueryProcessor, Executio
                         .flatMap( List::stream )
                         .collect( Collectors.toSet() );
                 List<CachedProposedRoutingPlan> routingPlansCached = RoutingPlanCache.INSTANCE.getIfPresent( logicalQueryInformation.getQueryClass(), partitionIds );
-                if ( !routingPlansCached.isEmpty() ) {
+                /*if ( !routingPlansCached.isEmpty() ) {
                     proposedRoutingPlans = routeCached( indexLookupRoot, routingPlansCached, statement, logicalQueryInformation, isAnalyze );
-                }
+                }*/
             }
 
             if ( proposedRoutingPlans == null ) {
