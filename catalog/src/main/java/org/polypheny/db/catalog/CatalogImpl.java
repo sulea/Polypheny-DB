@@ -1,5 +1,5 @@
 /*
- * Copyright 2019-2021 The Polypheny Project
+ * Copyright 2019-2022 The Polypheny Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,6 +46,7 @@ import org.mapdb.DBMaker;
 import org.mapdb.HTreeMap;
 import org.mapdb.Serializer;
 import org.mapdb.serializer.SerializerArrayTuple;
+import org.polypheny.db.StatusService;
 import org.polypheny.db.adapter.Adapter;
 import org.polypheny.db.adapter.AdapterManager;
 import org.polypheny.db.adapter.DataStore;
@@ -114,9 +115,9 @@ import org.polypheny.db.transaction.Statement;
 import org.polypheny.db.transaction.Transaction;
 import org.polypheny.db.type.PolyType;
 import org.polypheny.db.type.PolyTypeFamily;
-import org.polypheny.db.util.FileSystemManager;
 import org.polypheny.db.util.ImmutableIntList;
 import org.polypheny.db.util.Pair;
+import org.polypheny.db.util.PolyphenyHomeDirManager;
 import org.polypheny.db.view.MaterializedViewManager;
 
 
@@ -230,11 +231,11 @@ public class CatalogImpl extends Catalog {
             }
 
             if ( isPersistent ) {
-                log.info( "Making the catalog persistent." );
-                File folder = FileSystemManager.getInstance().registerNewFolder( "catalog" );
+                StatusService.print( "Making the catalog persistent." );
+                File folder = PolyphenyHomeDirManager.getInstance().registerNewFolder( "catalog" );
 
                 if ( Catalog.resetCatalog ) {
-                    log.info( "Resetting catalog on startup." );
+                    StatusService.print( "Resetting catalog on startup." );
                     if ( new File( folder, fileName ).exists() ) {
                         //noinspection ResultOfMethodCallIgnored
                         new File( folder, fileName ).delete();
@@ -262,7 +263,7 @@ public class CatalogImpl extends Catalog {
                 db.getStore().fileLoad();
 
             } else {
-                log.info( "Making the catalog in-memory." );
+                StatusService.print( "Making the catalog in-memory." );
                 db = DBMaker
                         .memoryDB()
                         .transactionEnable()
