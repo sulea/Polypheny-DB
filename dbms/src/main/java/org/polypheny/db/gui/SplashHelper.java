@@ -37,6 +37,7 @@ import javax.swing.WindowConstants;
 import javax.swing.border.EtchedBorder;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.polypheny.db.PolyphenyDb;
 import org.polypheny.db.StatusService;
 
 
@@ -135,7 +136,7 @@ public class SplashHelper implements Runnable {
 
 
         public String getControlVersion() {
-            String v = getClass().getPackage().getImplementationVersion();
+            String v = PolyphenyDb.class.getPackage().getImplementationVersion();
             if ( v == null ) {
                 return "Unknown";
             } else {

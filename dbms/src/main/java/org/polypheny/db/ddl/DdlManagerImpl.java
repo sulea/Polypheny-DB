@@ -2501,6 +2501,9 @@ public class DdlManagerImpl extends DdlManager {
         // Delete the table
         catalog.deleteTable( catalogTable.id );
 
+        // Remove tables from transaction for constraint enforcement
+        statement.getTransaction().getCatalogTables().remove( catalogTable );
+
         // Reset plan cache implementation cache & routing cache
         statement.getQueryProcessor().resetCaches();
     }

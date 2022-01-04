@@ -23,7 +23,7 @@ import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.calcite.avatica.AvaticaSqlException;
+import org.apache.calcite.avatica.AvaticaClientRuntimeException;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -153,21 +153,21 @@ public class UniqueConstraintTest {
                     connection.commit(); // todo remove when auto-commit works
                     try {
                         statement.executeUpdate( "INSERT INTO constraint_test VALUES (1, 2, 3, 4)" );
+                        connection.commit(); // todo remove when auto-commit works
                         Assert.fail( "Expected ConstraintViolationException was not thrown" );
-                    } catch ( AvaticaSqlException e ) {
-                        if ( !e.getErrorMessage().contains( "Remote driver error: Insert violates unique constraint" ) ) {
+                    } catch ( AvaticaClientRuntimeException e ) {
+                        if ( !e.getMessage().contains( "Transaction violates unique constraint" ) ) {
                             throw new RuntimeException( "Unexpected exception", e );
                         }
-                        connection.rollback(); // todo remove when auto-commit works
                     }
                     try {
                         statement.executeUpdate( "INSERT INTO constraint_test VALUES (2, 1, 1, 4)" );
+                        connection.commit(); // todo remove when auto-commit works
                         Assert.fail( "Expected ConstraintViolationException was not thrown" );
-                    } catch ( AvaticaSqlException e ) {
-                        if ( !e.getErrorMessage().contains( "Remote driver error: Insert violates unique constraint" ) ) {
+                    } catch ( AvaticaClientRuntimeException e ) {
+                        if ( !e.getMessage().contains( "Transaction violates unique constraint" ) ) {
                             throw new RuntimeException( "Unexpected exception", e );
                         }
-                        connection.rollback(); // todo remove when auto-commit works
                     }
                     TestHelper.checkResultSet(
                             statement.executeQuery( "SELECT * FROM constraint_test" ),
@@ -200,12 +200,12 @@ public class UniqueConstraintTest {
                     connection.commit(); // todo remove when auto-commit works
                     try {
                         statement.executeUpdate( "INSERT INTO constraint_test VALUES (2, 2, 3, 4), (4, 2, 3, 1)" );
+                        connection.commit(); // todo remove when auto-commit works
                         Assert.fail( "Expected ConstraintViolationException was not thrown" );
-                    } catch ( AvaticaSqlException e ) {
-                        if ( !e.getErrorMessage().contains( "Remote driver error: Insert violates unique constraint" ) ) {
+                    } catch ( AvaticaClientRuntimeException e ) {
+                        if ( !e.getMessage().contains( "Transaction violates unique constraint" ) ) {
                             throw new RuntimeException( "Unexpected exception", e );
                         }
-                        connection.rollback(); // todo remove when auto-commit works
                     }
                     TestHelper.checkResultSet(
                             statement.executeQuery( "SELECT * FROM constraint_test" ),
@@ -274,12 +274,12 @@ public class UniqueConstraintTest {
                     connection.commit(); // todo remove when auto-commit works
                     try {
                         statement.executeUpdate( "INSERT INTO constraint_test SELECT * FROM constraint_test" );
+                        connection.commit();
                         Assert.fail( "Expected ConstraintViolationException was not thrown" );
-                    } catch ( AvaticaSqlException e ) {
-                        if ( !e.getErrorMessage().contains( "Remote driver error: Insert violates unique constraint" ) ) {
+                    } catch ( AvaticaClientRuntimeException e ) {
+                        if ( !e.getMessage().contains( "Transaction violates unique constraint" ) ) {
                             throw new RuntimeException( "Unexpected exception", e );
                         }
-                        connection.rollback();  // todo remove when auto-commit works
                     }
                     TestHelper.checkResultSet(
                             statement.executeQuery( "SELECT * FROM constraint_test ORDER BY ctid" ),
@@ -315,12 +315,12 @@ public class UniqueConstraintTest {
                     connection.commit(); // todo remove when auto-commit works
                     try {
                         statement.executeUpdate( "INSERT INTO constraint_test SELECT c AS ctid, a + 2 AS a, b, c FROM constraint_test" );
+                        connection.commit();
                         Assert.fail( "Expected ConstraintViolationException was not thrown" );
-                    } catch ( AvaticaSqlException e ) {
-                        if ( !e.getErrorMessage().contains( "Remote driver error: Insert violates unique constraint" ) ) {
+                    } catch ( AvaticaClientRuntimeException e ) {
+                        if ( !e.getMessage().contains( "Transaction violates unique constraint" ) ) {
                             throw new RuntimeException( "Unexpected exception", e );
                         }
-                        connection.rollback(); // todo remove when auto-commit works
                     }
                     TestHelper.checkResultSet(
                             statement.executeQuery( "SELECT * FROM constraint_test ORDER BY ctid" ),
@@ -367,12 +367,12 @@ public class UniqueConstraintTest {
                     preparedStatement.addBatch();
                     try {
                         preparedStatement.executeBatch();
+                        connection.commit();
                         Assert.fail( "Expected ConstraintViolationException was not thrown" );
-                    } catch ( AvaticaSqlException e ) {
-                        if ( !e.getErrorMessage().contains( "Remote driver error: Insert violates unique constraint" ) ) {
+                    } catch ( AvaticaClientRuntimeException e ) {
+                        if ( !e.getMessage().contains( "Transaction violates unique constraint" ) ) {
                             throw new RuntimeException( "Unexpected exception", e );
                         }
-                        connection.rollback(); // todo remove when auto-commit works
                     }
 
                     // This should work
@@ -396,12 +396,12 @@ public class UniqueConstraintTest {
                     }
                     try {
                         preparedStatement.executeBatch();
+                        connection.commit();
                         Assert.fail( "Expected ConstraintViolationException was not thrown" );
-                    } catch ( AvaticaSqlException e ) {
-                        if ( !e.getErrorMessage().contains( "Remote driver error: Insert violates unique constraint" ) ) {
+                    } catch ( AvaticaClientRuntimeException e ) {
+                        if ( !e.getMessage().contains( "Transaction violates unique constraint" ) ) {
                             throw new RuntimeException( "Unexpected exception", e );
                         }
-                        connection.rollback(); // todo remove when auto-commit works
                     }
                     TestHelper.checkResultSet(
                             statement.executeQuery( "SELECT * FROM constraint_test ORDER BY ctid" ),
@@ -451,12 +451,12 @@ public class UniqueConstraintTest {
                     preparedStatement.addBatch();
                     try {
                         preparedStatement.executeBatch();
+                        connection.commit();
                         Assert.fail( "Expected ConstraintViolationException was not thrown" );
-                    } catch ( AvaticaSqlException e ) {
-                        if ( !e.getErrorMessage().contains( "Remote driver error: Update violates unique constraint" ) ) {
+                    } catch ( AvaticaClientRuntimeException e ) {
+                        if ( !e.getMessage().contains( "Transaction violates unique constraint" ) ) {
                             throw new RuntimeException( "Unexpected exception", e );
                         }
-                        connection.rollback(); // todo remove when auto-commit works
                     }
 
                     // This should work
@@ -493,12 +493,12 @@ public class UniqueConstraintTest {
                     preparedStatement.addBatch();
                     try {
                         preparedStatement.executeBatch();
+                        connection.commit();// todo remove when auto-commit works
                         Assert.fail( "Expected ConstraintViolationException was not thrown" );
-                    } catch ( AvaticaSqlException e ) {
-                        if ( !e.getErrorMessage().contains( "Remote driver error: Update violates unique constraint" ) ) {
+                    } catch ( AvaticaClientRuntimeException e ) {
+                        if ( !e.getMessage().contains( "Transaction violates unique constraint" ) ) {
                             throw new RuntimeException( "Unexpected exception", e );
                         }
-                        connection.rollback(); // todo remove when auto-commit works
                     }
                 } finally {
                     statement.executeUpdate( "DROP TABLE constraint_test" );
@@ -508,8 +508,6 @@ public class UniqueConstraintTest {
     }
 
 
-    //@Ignore // fails as it selects all values existing and the new value calculated
-    // this leads for example with 1,2,3 and op + 1 to crossover as 1 -> 2
     @Test
     public void updateNoConflictTest() throws SQLException {
         try ( JdbcConnection polyphenyDbConnection = new JdbcConnection( true ) ) {
@@ -571,30 +569,30 @@ public class UniqueConstraintTest {
                     connection.commit(); // todo remove when auto-commit works
                     try {
                         statement.executeUpdate( "UPDATE constraint_test SET ctid = 1" );
+                        connection.commit();
                         Assert.fail( "Expected ConstraintViolationException was not thrown" );
-                    } catch ( AvaticaSqlException e ) {
-                        if ( !e.getErrorMessage().contains( "Remote driver error: Update violates unique constraint" ) ) {
+                    } catch ( AvaticaClientRuntimeException e ) {
+                        if ( !e.getMessage().contains( "Transaction violates unique constraint" ) ) {
                             throw new RuntimeException( "Unexpected exception", e );
                         }
-                        connection.rollback(); // todo remove when auto-commit works
                     }
                     try {
                         statement.executeUpdate( "UPDATE constraint_test SET a = 42, b = 73" );
+                        connection.commit();
                         Assert.fail( "Expected ConstraintViolationException was not thrown" );
-                    } catch ( AvaticaSqlException e ) {
-                        if ( !e.getErrorMessage().contains( "Remote driver error: Update violates unique constraint" ) ) {
+                    } catch ( AvaticaClientRuntimeException e ) {
+                        if ( !e.getMessage().contains( "Transaction violates unique constraint" ) ) {
                             throw new RuntimeException( "Unexpected exception", e );
                         }
-                        connection.rollback(); // todo remove when auto-commit works
                     }
                     try {
                         statement.executeUpdate( "UPDATE constraint_test SET ctid = 4 WHERE a = 3" );
+                        connection.commit();
                         Assert.fail( "Expected ConstraintViolationException was not thrown" );
-                    } catch ( AvaticaSqlException e ) {
-                        if ( !e.getErrorMessage().contains( "Remote driver error: Update violates unique constraint" ) ) {
+                    } catch ( AvaticaClientRuntimeException e ) {
+                        if ( !e.getMessage().contains( "Transaction violates unique constraint" ) ) {
                             throw new RuntimeException( "Unexpected exception", e );
                         }
-                        connection.rollback(); // todo remove when auto-commit works
                     }
                     TestHelper.checkResultSet(
                             statement.executeQuery( "SELECT * FROM constraint_test ORDER BY ctid" ),

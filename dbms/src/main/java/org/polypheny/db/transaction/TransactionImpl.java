@@ -167,7 +167,7 @@ public class TransactionImpl implements Transaction, Comparable<Object> {
         }
 
         if ( !catalogTables.isEmpty() ) {
-            Statement statement = statements.get( 0 );
+            Statement statement = createStatement();
             QueryProcessor processor = statement.getQueryProcessor();
             List<EnforcementInformation> infos = EnumerableAdjuster
                     .getConstraintAlg( catalogTables, statement );
@@ -176,8 +176,9 @@ public class TransactionImpl implements Transaction, Comparable<Object> {
                     .map( s -> processor.prepareQuery( AlgRoot.of( s.getControl(), Kind.SELECT ), false ) ).collect( Collectors.toList() );
             List<List<List<Object>>> rows = results.stream().map( r -> r.getRows( statement, -1 ) ).filter( r -> r.size() != 0 ).collect( Collectors.toList() );
             if ( rows.size() != 0 ) {
+                Integer index = (Integer) rows.get( 0 ).get( 0 ).get( 1 );
                 rollback();
-                throw new TransactionException( "There are violated constraints, the transaction was rolled back!" );
+                throw new TransactionException( infos.get( 0 ).getErrorMessages().get( index ) + "\nThere are violated constraints, the transaction was rolled back!" );
             }
         }
 
