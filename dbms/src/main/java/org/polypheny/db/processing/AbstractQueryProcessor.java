@@ -365,7 +365,7 @@ public abstract class AbstractQueryProcessor implements QueryProcessor, Executio
             }
 
             if ( constraintsRoot.kind == Kind.UPDATE || constraintsRoot.kind == Kind.INSERT ) {
-                constraintsRoot = EnumerableAdjuster.adjustBatch( constraintsRoot, statement );
+                //constraintsRoot = EnumerableAdjuster.adjustBatch( constraintsRoot, statement );
             }
 
             if ( constraintsRoot.kind.belongsTo( Kind.DML ) && (RuntimeConfig.UNIQUE_CONSTRAINT_ENFORCEMENT.getBoolean() || RuntimeConfig.FOREIGN_KEY_ENFORCEMENT.getBoolean()) ) {
