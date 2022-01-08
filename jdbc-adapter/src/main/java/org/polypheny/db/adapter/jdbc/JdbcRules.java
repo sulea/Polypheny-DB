@@ -39,10 +39,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Predicate;
-import org.apache.calcite.linq4j.Enumerable;
 import org.apache.calcite.linq4j.Queryable;
 import org.apache.calcite.linq4j.tree.Expression;
-import org.polypheny.db.PolyResult;
 import org.polypheny.db.adapter.jdbc.rel2sql.SqlImplementor;
 import org.polypheny.db.adapter.jdbc.rel2sql.SqlImplementor.Result;
 import org.polypheny.db.algebra.AbstractAlgNode;
@@ -63,7 +61,6 @@ import org.polypheny.db.algebra.core.Join;
 import org.polypheny.db.algebra.core.JoinAlgType;
 import org.polypheny.db.algebra.core.Minus;
 import org.polypheny.db.algebra.core.Project;
-import org.polypheny.db.algebra.core.Provider;
 import org.polypheny.db.algebra.core.SemiJoin;
 import org.polypheny.db.algebra.core.Sort;
 import org.polypheny.db.algebra.core.TableModify;
@@ -85,7 +82,6 @@ import org.polypheny.db.plan.AlgTrait;
 import org.polypheny.db.plan.AlgTraitSet;
 import org.polypheny.db.plan.Convention;
 import org.polypheny.db.prepare.Prepare;
-import org.polypheny.db.prepare.Prepare.PreparedResult;
 import org.polypheny.db.rex.RexCall;
 import org.polypheny.db.rex.RexInputRef;
 import org.polypheny.db.rex.RexLiteral;
@@ -101,7 +97,6 @@ import org.polypheny.db.sql.sql.SqlDialect;
 import org.polypheny.db.sql.sql.SqlFunction;
 import org.polypheny.db.sql.sql.fun.SqlItemOperator;
 import org.polypheny.db.tools.AlgBuilderFactory;
-import org.polypheny.db.transaction.Statement;
 import org.polypheny.db.type.PolyType;
 import org.polypheny.db.util.ImmutableBitSet;
 import org.polypheny.db.util.trace.PolyphenyDbTrace;
@@ -138,8 +133,7 @@ public class JdbcRules {
                 new JdbcIntersectRule( out, algBuilderFactory ),
                 new JdbcMinusRule( out, algBuilderFactory ),
                 new JdbcTableModificationRule( out, algBuilderFactory ),
-                new JdbcValuesRule( out, algBuilderFactory ),
-                new JdbcProviderRule( out, algBuilderFactory ) );
+                new JdbcValuesRule( out, algBuilderFactory ) );
     }
 
 
@@ -1098,58 +1092,6 @@ public class JdbcRules {
 
     }
 
-    public static class JdbcProviderRule extends JdbcConverterRule {
-
-
-        /**
-         * Creates an <code>AbstractRelNode</code>.
-         */
-        public JdbcProviderRule( JdbcConvention out, AlgBuilderFactory relBuilderFactory ) {
-            super( Provider.class, (Predicate<AlgNode>) r -> true, Convention.NONE, out, relBuilderFactory, "JdbcProvider." + out );
-        }
-
-
-        @Override
-        public AlgNode convert( AlgNode rel ) {
-            final Provider provider = (Provider) rel;
-            /*final ModifiableTable modifiableTable = provider.getTable().unwrap( ModifiableTable.class );
-            if ( modifiableTable == null ) {
-                return null;
-            }*/
-            final AlgTraitSet traitSet = provider.getTraitSet().replace( out );
-            return new JdbcProvider(
-                    provider.getCluster(),
-                    traitSet,
-                    provider.getInput(),
-                    provider.getCondition(),
-                    provider.getResult(),
-                    provider.getStatement());
-        }
-
-    }
-
-
-    public static class JdbcProvider extends Provider implements JdbcAlg {
-
-        /**
-         * Creates an <code>AbstractRelNode</code>.
-         *
-         * @param cluster
-         * @param traitSet
-         * @param input
-         * @param condition
-         */
-        public JdbcProvider( AlgOptCluster cluster, AlgTraitSet traitSet, AlgNode input, RexNode condition, PolyResult result, Statement statement ) {
-            super( cluster, traitSet, input, condition, result, statement );
-        }
-
-
-        @Override
-        public Result implement( JdbcImplementor implementor ) {
-            return null;
-        }
-
-    }
 
     /**
      * Rule that converts a values operator to JDBC.

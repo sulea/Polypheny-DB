@@ -100,7 +100,9 @@ import org.apache.calcite.linq4j.function.Function1;
 import org.apache.calcite.linq4j.function.NonDeterministic;
 import org.apache.calcite.linq4j.tree.Primitive;
 import org.polypheny.db.adapter.DataContext;
+import org.polypheny.db.adapter.enumerable.EnumerableJoin.PRE_ROUTE;
 import org.polypheny.db.adapter.enumerable.JavaRowFormat;
+import org.polypheny.db.algebra.AlgNode;
 import org.polypheny.db.algebra.exceptions.ConstraintViolationException;
 import org.polypheny.db.algebra.json.JsonConstructorNullClause;
 import org.polypheny.db.algebra.json.JsonExistsErrorBehavior;
@@ -273,6 +275,7 @@ public class Functions {
     }
 
 
+    @SuppressWarnings("unused")
     public static Enumerable<?> batch( final DataContext context, final Enumerable<Object[]> baz ) {
         List<Object> results = new ArrayList<>();
 
@@ -299,13 +302,33 @@ public class Functions {
     }
 
 
-    public static void intoContext( final DataContext context, final Enumerable<Object[]> baz, final List<String> types ) {
-        //context.resetParameterValues();
+    public static void stream( final DataContext context, final Enumerable<Object[]> provider, final List<String> types ) {
         List<PolyType> polyTypes = types.stream().map( PolyType::valueOf ).collect( Collectors.toList() );
         PolyTypeFactoryImpl factory = new PolyTypeFactoryImpl( AlgDataTypeSystem.DEFAULT );
         List<AlgDataType> algDataTypes = polyTypes.stream().map( factory::createPolyType ).collect( Collectors.toList() );
-        //context.resetParameterValues();
-        // better approach would here be to create a new Datacontext and hand it to the executor
+
+        List<Object[]> values = new ArrayList<>();
+        for ( Object[] o : provider ) {
+            values.add( o );
+        }
+
+    }
+
+
+    @SuppressWarnings("unused")
+    public static void routeJoinFilter( final DataContext context, final Enumerable<Object[]> provider, AlgNode other, PRE_ROUTE side ) {
+        System.out.println( "in here" );
+    }
+
+
+    @SuppressWarnings("unused")
+    public static void intoContext( final DataContext context, final Enumerable<Object[]> baz, final List<String> types ) {
+
+        List<PolyType> polyTypes = types.stream().map( PolyType::valueOf ).collect( Collectors.toList() );
+        PolyTypeFactoryImpl factory = new PolyTypeFactoryImpl( AlgDataTypeSystem.DEFAULT );
+        List<AlgDataType> algDataTypes = polyTypes.stream().map( factory::createPolyType ).collect( Collectors.toList() );
+
+        // better approach would here be to create a new DataContext and hand it to the executor
         List<Object[]> values = new ArrayList<>();
         for ( Object[] o : baz ) {
             values.add( o );
@@ -325,10 +348,10 @@ public class Functions {
         for ( int i = 0; i < values.get( 0 ).length; i++ ) {
             context.addParameterValues( i, algDataTypes.get( i ), vals.get( i ) );
         }
-        //return null;
     }
 
 
+    @SuppressWarnings("unused")
     public static Enumerable<?> enforceConstraint( Enumerable<Object[]> modify, Enumerable<Object[]> control, List<Class<? extends Exception>> exceptions, List<String> msgs ) {
         // todo move into operator
         List<Object> results = new ArrayList<>();
@@ -345,8 +368,7 @@ public class Functions {
         } else {
             // force rollback
             throw new ConstraintViolationException( Joiner.on( "\n" )
-                    .join(
-                            validationIndexes.stream().map( msgs::get ).collect( Collectors.toList() ) ) );
+                    .join( validationIndexes.stream().map( msgs::get ).collect( Collectors.toList() ) ) );
         }
     }
 

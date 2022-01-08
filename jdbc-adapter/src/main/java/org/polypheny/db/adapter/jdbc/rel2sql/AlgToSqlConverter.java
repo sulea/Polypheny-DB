@@ -46,9 +46,6 @@ import java.util.Map;
 import java.util.SortedSet;
 import java.util.stream.Collectors;
 import org.apache.calcite.linq4j.tree.Expressions;
-import org.polypheny.db.adapter.jdbc.JdbcConvention;
-import org.polypheny.db.adapter.jdbc.JdbcTable;
-import org.polypheny.db.adapter.jdbc.JdbcTableScan;
 import org.polypheny.db.algebra.AlgFieldCollation;
 import org.polypheny.db.algebra.AlgNode;
 import org.polypheny.db.algebra.constant.JoinConditionType;
@@ -64,7 +61,6 @@ import org.polypheny.db.algebra.core.JoinAlgType;
 import org.polypheny.db.algebra.core.Match;
 import org.polypheny.db.algebra.core.Minus;
 import org.polypheny.db.algebra.core.Project;
-import org.polypheny.db.algebra.core.Provider;
 import org.polypheny.db.algebra.core.Sort;
 import org.polypheny.db.algebra.core.TableModify;
 import org.polypheny.db.algebra.core.TableScan;
@@ -76,7 +72,6 @@ import org.polypheny.db.algebra.type.AlgDataTypeField;
 import org.polypheny.db.languages.OperatorRegistry;
 import org.polypheny.db.languages.ParserPos;
 import org.polypheny.db.nodes.Node;
-import org.polypheny.db.rex.RexBuilder;
 import org.polypheny.db.rex.RexCall;
 import org.polypheny.db.rex.RexLiteral;
 import org.polypheny.db.rex.RexLocalRef;
@@ -414,26 +409,6 @@ public abstract class AlgToSqlConverter extends SqlImplementor implements Reflec
 
 
     /**
-     * @see #dispatch filter
-     */
-    public Result visit( Provider e ) {
-        RexBuilder rexBuilder = e.getCluster().getRexBuilder();
-        Result x = result(
-                new SqlIdentifier( e.getTable().getQualifiedName(), ParserPos.ZERO ),
-                ImmutableList.of( Clause.FROM ),
-                new JdbcTableScan( e.getCluster(), e.getTable(), (JdbcTable) e.getTable().getTable(), new JdbcConvention( dialect, null, "DUMMY" ) ),
-                null );
-        parseCorrelTable( e, x );
-
-        final Builder builder = x.builder( e, isUnion, Clause.WHERE );
-
-        builder.setWhere( builder.context.toSql( null, e.getEnumerableCondition( rexBuilder ) ) );
-        return builder.result();
-
-    }
-
-
-    /**
      * @see #dispatch
      */
     public Result visit( Sort e ) {
@@ -496,20 +471,6 @@ public abstract class AlgToSqlConverter extends SqlImplementor implements Reflec
                 return result( sqlInsert, ImmutableList.of(), modify, null );
             }
             case UPDATE: {
-                /*if ( modify.getInput() instanceof Provider ) {
-                    ((Provider) modify.getInput()).setTable( modify.getTable() );
-                    final Result input = visitChild( 0, modify.getInput() );
-
-                    final SqlUpdate sqlUpdate = new SqlUpdate(
-                            POS,
-                            sqlTargetTable,
-                            physicalIdentifierList( modify.getTable().getQualifiedName(), modify.getUpdateColumnList() ),
-                            exprList( context, ((Provider) modify.getInput()).getUpdatedValue() ),
-                            ((SqlSelect) input.node).getWhere(),
-                            input.asSelect(),
-                            null );
-                    return result( new SqlNodeList(  )sqlUpdate, input.clauses, modify, null );
-                }else {*/
                 final Result input = visitChild( 0, modify.getInput() );
 
                 final SqlUpdate sqlUpdate = new SqlUpdate(

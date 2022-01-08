@@ -34,11 +34,11 @@
 package org.polypheny.db.adapter.enumerable;
 
 
-import com.google.common.collect.ImmutableList;
 import java.util.Set;
 import org.apache.calcite.linq4j.tree.BlockBuilder;
 import org.apache.calcite.linq4j.tree.Expression;
 import org.apache.calcite.linq4j.tree.Expressions;
+import org.polypheny.db.adapter.DataContext;
 import org.polypheny.db.algebra.AlgCollationTraitDef;
 import org.polypheny.db.algebra.AlgNode;
 import org.polypheny.db.algebra.AlgNodes;
@@ -158,6 +158,30 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
     public Result implement( EnumerableAlgImplementor implementor, Prefer pref ) {
         BlockBuilder builder = new BlockBuilder();
         final Result leftResult = implementor.visitChild( this, 0, (EnumerableAlg) left, pref );
+
+        Expression exp = builder.append( "values_" + System.nanoTime(), leftResult.block );
+
+        Expression result = Expressions.call( BuiltInMethod.ROUTE_JOIN_FILTER.method, Expressions.constant( DataContext.ROOT ), exp, Expressions.constant( right ), Expressions.constant( PRE_ROUTE.LEFT ) );
+        builder.add( Expressions.return_( null, builder.append( "collector_" + System.nanoTime(), result ) ) );
+
+        final PhysType physType =
+                PhysTypeImpl.of(
+                        implementor.getTypeFactory(),
+                        getRowType(),
+                        pref.prefer( JavaRowFormat.CUSTOM ) );
+        return implementor.result( physType, builder.toBlock() );
+    }
+
+
+    public enum PRE_ROUTE {
+        LEFT,
+        RIGHT
+    }
+
+    /*@Override
+    public Result implement( EnumerableAlgImplementor implementor, Prefer pref ) {
+        BlockBuilder builder = new BlockBuilder();
+        final Result leftResult = implementor.visitChild( this, 0, (EnumerableAlg) left, pref );
         Expression leftExpression = builder.append( "left" + System.nanoTime(), leftResult.block );
         final Result rightResult = implementor.visitChild( this, 1, (EnumerableAlg) right, pref );
         Expression rightExpression = builder.append( "right" + System.nanoTime(), rightResult.block );
@@ -178,7 +202,7 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
                                                 .append( Expressions.constant( joinType.generatesNullsOnLeft() ) )
                                                 .append( Expressions.constant( joinType.generatesNullsOnRight() ) ) ) )
                         .toBlock() );
-    }
+    }*/
 
 }
 

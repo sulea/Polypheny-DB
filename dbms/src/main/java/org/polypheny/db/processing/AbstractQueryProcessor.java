@@ -358,7 +358,7 @@ public abstract class AbstractQueryProcessor implements QueryProcessor, Executio
                 statement.getProcessingDuration().start( "Index Lookup Rewrite" );
             }
 
-            constraintsRoot = EnumerableAdjuster.prerouteJoins( constraintsRoot, statement, this );
+            //constraintsRoot = EnumerableAdjuster.prerouteJoins( constraintsRoot, statement, this );
 
             if ( constraintsRoot.kind == Kind.UPDATE && EnumerableAdjuster.needsAdjustment( constraintsRoot.alg ) ) {
                 constraintsRoot = EnumerableAdjuster.adjustModify( constraintsRoot, statement );
