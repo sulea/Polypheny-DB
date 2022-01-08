@@ -358,9 +358,11 @@ public class EnumerableAdjuster {
 
 
         private boolean testConstraintsValid() {
-            if ( RuntimeConfig.FOREIGN_KEY_ENFORCEMENT.getBoolean() || RuntimeConfig.UNIQUE_VALUES.getBoolean() ) {
+            if ( RuntimeConfig.FOREIGN_KEY_ENFORCEMENT.getBoolean() || RuntimeConfig.UNIQUE_CONSTRAINT_ENFORCEMENT.getBoolean() ) {
                 try {
-                    List<CatalogTable> tables = Catalog.getInstance().getTables( null, null, null )
+                    List<CatalogTable> tables = Catalog
+                            .getInstance()
+                            .getTables( null, null, null )
                             .stream()
                             .filter( t -> t.tableType == TableType.TABLE )
                             .collect( Collectors.toList() );
@@ -371,8 +373,13 @@ public class EnumerableAdjuster {
                             .getConstraintAlg( new TreeSet<>( tables ), statement );
                     List<PolyResult> results = infos
                             .stream()
-                            .map( s -> processor.prepareQuery( AlgRoot.of( s.getControl(), Kind.SELECT ), false ) ).collect( Collectors.toList() );
-                    List<List<List<Object>>> rows = results.stream().map( r -> r.getRows( statement, -1 ) ).filter( r -> r.size() != 0 ).collect( Collectors.toList() );
+                            .map( s -> processor.prepareQuery( AlgRoot.of( s.getControl(), Kind.SELECT ), false ) )
+                            .collect( Collectors.toList() );
+                    List<List<List<Object>>> rows = results.stream()
+                            .map( r -> r.getRows( statement, -1 ) )
+                            .filter( r -> r.size() != 0 )
+                            .collect( Collectors.toList() );
+
                     if ( rows.size() != 0 ) {
                         Integer index = (Integer) rows.get( 0 ).get( 0 ).get( 1 );
                         throw new TransactionException( infos.get( 0 ).getErrorMessages().get( index ) + "\nThere are violated constraints, the transaction was rolled back!" );
