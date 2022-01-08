@@ -18,6 +18,8 @@ package org.polypheny.db.schema;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
 import lombok.Getter;
 import org.apache.calcite.linq4j.Enumerable;
 import org.apache.calcite.linq4j.Queryable;
@@ -51,6 +53,9 @@ public class LogicalTable extends AbstractQueryableTable implements Translatable
     private final String logicalTableName;
     @Getter
     private final long tableId;
+
+    @Getter
+    private final Set<Long> constraintIds = new TreeSet<>();
 
     @Getter
     private final List<Long> columnIds;

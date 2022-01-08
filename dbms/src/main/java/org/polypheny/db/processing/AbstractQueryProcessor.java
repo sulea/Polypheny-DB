@@ -21,6 +21,7 @@ import com.google.common.collect.Lists;
 import java.lang.reflect.Type;
 import java.util.AbstractList;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -136,7 +137,6 @@ import org.polypheny.db.transaction.Lock.LockMode;
 import org.polypheny.db.transaction.LockManager;
 import org.polypheny.db.transaction.Statement;
 import org.polypheny.db.transaction.TableAccessMap;
-import org.polypheny.db.transaction.TableAccessMap.Mode;
 import org.polypheny.db.transaction.TableAccessMap.TableIdentifier;
 import org.polypheny.db.transaction.TransactionImpl;
 import org.polypheny.db.type.PolyType;
@@ -369,8 +369,8 @@ public abstract class AbstractQueryProcessor implements QueryProcessor, Executio
             }
 
             if ( constraintsRoot.kind.belongsTo( Kind.DML ) && (RuntimeConfig.UNIQUE_CONSTRAINT_ENFORCEMENT.getBoolean() || RuntimeConfig.FOREIGN_KEY_ENFORCEMENT.getBoolean()) ) {
-                EnumerableAdjuster.attachConstraint( constraintsRoot.alg, statement );
-                //constraintsRoot = EnumerableAdjuster.adjustConstraint( constraintsRoot, statement );
+                EnumerableAdjuster.attachOnCommitConstraints( constraintsRoot.alg, statement );
+                constraintsRoot = EnumerableAdjuster.attachOnQueryConstraints( constraintsRoot, statement );
             }
 
             AlgRoot indexLookupRoot = constraintsRoot;
@@ -607,18 +607,14 @@ public abstract class AbstractQueryProcessor implements QueryProcessor, Executio
     private void acquireLock( boolean isAnalyze, AlgRoot logicalRoot ) {
         // Locking
         try {
-            // Get a shared global schema lock (only DDLs acquire an exclusive global schema lock)
-            LockManager.INSTANCE.lock( LockManager.GLOBAL_LOCK, (TransactionImpl) statement.getTransaction(), LockMode.SHARED );
+            Collection<Entry<TableIdentifier, LockMode>> idAccessMap = new ArrayList<>();
             // Get locks for individual tables
             TableAccessMap accessMap = new TableAccessMap( logicalRoot.alg );
-            for ( TableIdentifier tableIdentifier : accessMap.getTablesAccessed() ) {
-                Mode mode = accessMap.getTableAccessMode( tableIdentifier );
-                if ( mode == Mode.READ_ACCESS ) {
-                    LockManager.INSTANCE.lock( tableIdentifier, (TransactionImpl) statement.getTransaction(), LockMode.SHARED );
-                } else if ( mode == Mode.WRITE_ACCESS || mode == Mode.READWRITE_ACCESS ) {
-                    LockManager.INSTANCE.lock( tableIdentifier, (TransactionImpl) statement.getTransaction(), LockMode.EXCLUSIVE );
-                }
-            }
+            // Get a shared global schema lock (only DDLs acquire an exclusive global schema lock)
+            idAccessMap.add( Pair.of( LockManager.GLOBAL_LOCK, LockMode.SHARED ) );
+
+            idAccessMap.addAll( accessMap.getTablesAccessedPair() );
+            LockManager.INSTANCE.lock( idAccessMap, (TransactionImpl) statement.getTransaction() );
         } catch ( DeadlockException e ) {
             throw new RuntimeException( e );
         }

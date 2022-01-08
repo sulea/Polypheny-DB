@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 import lombok.Getter;
 import org.polypheny.db.PolyResult;
@@ -39,7 +40,16 @@ import org.polypheny.db.algebra.logical.LogicalConstraintEnforcer.EnforcementInf
 import org.polypheny.db.algebra.logical.LogicalJoin;
 import org.polypheny.db.algebra.logical.LogicalTableModify;
 import org.polypheny.db.algebra.operators.OperatorName;
+import org.polypheny.db.catalog.Catalog;
+import org.polypheny.db.catalog.Catalog.TableType;
 import org.polypheny.db.catalog.entity.CatalogTable;
+import org.polypheny.db.catalog.exceptions.GenericCatalogException;
+import org.polypheny.db.catalog.exceptions.UnknownDatabaseException;
+import org.polypheny.db.catalog.exceptions.UnknownSchemaException;
+import org.polypheny.db.catalog.exceptions.UnknownUserException;
+import org.polypheny.db.config.Config;
+import org.polypheny.db.config.Config.ConfigListener;
+import org.polypheny.db.config.RuntimeConfig;
 import org.polypheny.db.languages.OperatorRegistry;
 import org.polypheny.db.rex.RexBuilder;
 import org.polypheny.db.rex.RexCall;
@@ -48,6 +58,9 @@ import org.polypheny.db.rex.RexNode;
 import org.polypheny.db.rex.RexShuttle;
 import org.polypheny.db.tools.AlgBuilder;
 import org.polypheny.db.transaction.Statement;
+import org.polypheny.db.transaction.Transaction;
+import org.polypheny.db.transaction.TransactionException;
+import org.polypheny.db.transaction.TransactionManager;
 
 public class EnumerableAdjuster {
 
@@ -81,7 +94,7 @@ public class EnumerableAdjuster {
     }
 
 
-    public static AlgRoot adjustConstraint( AlgRoot root, Statement statement ) {
+    public static AlgRoot attachOnQueryConstraints( AlgRoot root, Statement statement ) {
         return AlgRoot.of(
                 LogicalConstraintEnforcer.create( root.alg, statement ),
                 root.kind );
@@ -94,7 +107,7 @@ public class EnumerableAdjuster {
     }
 
 
-    public static void attachConstraint( AlgNode node, Statement statement ) {
+    public static void attachOnCommitConstraints( AlgNode node, Statement statement ) {
         TableModify modify;
         // todo maybe use shuttle?
         if ( node instanceof TableModify ) {
@@ -116,7 +129,11 @@ public class EnumerableAdjuster {
 
 
     public static List<EnforcementInformation> getConstraintAlg( Set<CatalogTable> catalogTables, Statement statement ) {
-        return catalogTables.stream().map( t -> LogicalConstraintEnforcer.getControl( t, statement ) ).collect( Collectors.toList() );
+        return catalogTables
+                .stream()
+                .map( t -> LogicalConstraintEnforcer.getControl( t, statement ) )
+                .filter( i -> i.getControl() != null )
+                .collect( Collectors.toList() );
     }
 
 
@@ -307,6 +324,65 @@ public class EnumerableAdjuster {
                 }
             }
 
+        }
+
+    }
+
+
+    static public class ConstraintTracker implements ConfigListener {
+
+        private final TransactionManager manager;
+
+
+        public ConstraintTracker( TransactionManager manager ) {
+            this.manager = manager;
+        }
+
+
+        @Override
+        public void onConfigChange( Config c ) {
+            if ( !testConstraintsValid() ) {
+                c.setBoolean( !c.getBoolean() );
+                throw new RuntimeException( "Could not change the constraints." );
+            }
+        }
+
+
+        @Override
+        public void restart( Config c ) {
+            if ( !testConstraintsValid() ) {
+                c.setBoolean( !c.getBoolean() );
+                throw new RuntimeException( "After restart the constraints where not longer enforceable." );
+            }
+        }
+
+
+        private boolean testConstraintsValid() {
+            if ( RuntimeConfig.FOREIGN_KEY_ENFORCEMENT.getBoolean() || RuntimeConfig.UNIQUE_VALUES.getBoolean() ) {
+                try {
+                    List<CatalogTable> tables = Catalog.getInstance().getTables( null, null, null )
+                            .stream()
+                            .filter( t -> t.tableType == TableType.TABLE )
+                            .collect( Collectors.toList() );
+                    Transaction transaction = this.manager.startTransaction( "pa", "APP", false, "ConstraintEnforcement" );
+                    Statement statement = transaction.createStatement();
+                    QueryProcessor processor = statement.getQueryProcessor();
+                    List<EnforcementInformation> infos = EnumerableAdjuster
+                            .getConstraintAlg( new TreeSet<>( tables ), statement );
+                    List<PolyResult> results = infos
+                            .stream()
+                            .map( s -> processor.prepareQuery( AlgRoot.of( s.getControl(), Kind.SELECT ), false ) ).collect( Collectors.toList() );
+                    List<List<List<Object>>> rows = results.stream().map( r -> r.getRows( statement, -1 ) ).filter( r -> r.size() != 0 ).collect( Collectors.toList() );
+                    if ( rows.size() != 0 ) {
+                        Integer index = (Integer) rows.get( 0 ).get( 0 ).get( 1 );
+                        throw new TransactionException( infos.get( 0 ).getErrorMessages().get( index ) + "\nThere are violated constraints, the transaction was rolled back!" );
+                    }
+
+                } catch ( UnknownDatabaseException | UnknownSchemaException | UnknownUserException | TransactionException | GenericCatalogException e ) {
+                    return false;
+                }
+            }
+            return true;
         }
 
     }

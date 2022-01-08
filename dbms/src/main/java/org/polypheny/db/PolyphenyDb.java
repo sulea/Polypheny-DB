@@ -57,6 +57,7 @@ import org.polypheny.db.partition.FrequencyMapImpl;
 import org.polypheny.db.partition.PartitionManagerFactory;
 import org.polypheny.db.partition.PartitionManagerFactoryImpl;
 import org.polypheny.db.processing.AuthenticatorImpl;
+import org.polypheny.db.processing.EnumerableAdjuster.ConstraintTracker;
 import org.polypheny.db.statistic.StatisticQueryProcessor;
 import org.polypheny.db.statistic.StatisticsManager;
 import org.polypheny.db.transaction.PUID;
@@ -335,6 +336,11 @@ public class PolyphenyDb {
 
         MonitoringServiceProvider.resetRepository = resetCatalog;
         MonitoringService monitoringService = MonitoringServiceProvider.getInstance();
+
+        // Add tracker, which rechecks constraints after enabling
+        ConstraintTracker tracker = new ConstraintTracker( transactionManager );
+        RuntimeConfig.FOREIGN_KEY_ENFORCEMENT.addObserver( tracker );
+        RuntimeConfig.UNIQUE_CONSTRAINT_ENFORCEMENT.addObserver( tracker );
 
         log.info( "****************************************************************************************************" );
         log.info( "                Polypheny-DB successfully started and ready to process your queries!" );

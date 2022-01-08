@@ -38,6 +38,7 @@ import org.polypheny.db.catalog.Catalog;
 import org.polypheny.db.catalog.Catalog.ConstraintType;
 import org.polypheny.db.catalog.entity.CatalogConstraint;
 import org.polypheny.db.catalog.entity.CatalogForeignKey;
+import org.polypheny.db.catalog.entity.CatalogKey.EnforcementTime;
 import org.polypheny.db.catalog.entity.CatalogPrimaryKey;
 import org.polypheny.db.catalog.entity.CatalogSchema;
 import org.polypheny.db.catalog.entity.CatalogTable;
@@ -105,8 +106,16 @@ public class LogicalConstraintEnforcer extends ConstraintEnforcer {
         final RexBuilder rexBuilder = modify.getCluster().getRexBuilder();
 
         final List<CatalogConstraint> constraints = new ArrayList<>( Catalog.getInstance().getConstraints( table.id ) );
-        final List<CatalogForeignKey> foreignKeys = Catalog.getInstance().getForeignKeys( table.id );
-        final List<CatalogForeignKey> exportedKeys = Catalog.getInstance().getExportedKeys( table.id );
+        final List<CatalogForeignKey> foreignKeys = Catalog.getInstance()
+                .getForeignKeys( table.id )
+                .stream()
+                .filter( f -> f.enforcementTime == EnforcementTime.ON_QUERY )
+                .collect( Collectors.toList() );
+        final List<CatalogForeignKey> exportedKeys = Catalog.getInstance()
+                .getExportedKeys( table.id )
+                .stream()
+                .filter( f -> f.enforcementTime == EnforcementTime.ON_QUERY )
+                .collect( Collectors.toList() );
 
         // Turn primary key into an artificial unique constraint
         CatalogPrimaryKey pk = Catalog.getInstance().getPrimaryKey( table.primaryKey );
@@ -198,7 +207,7 @@ public class LogicalConstraintEnforcer extends ConstraintEnforcer {
         }
 
         if ( filters.size() == 0 ) {
-            throw new RuntimeException( "Constrained node was not correctly set!" );
+            constrainedNode = null;
         } else if ( filters.size() == 1 ) {
             constrainedNode = filters.poll();
         } else if ( filters.size() == 2 ) {
@@ -311,7 +320,7 @@ public class LogicalConstraintEnforcer extends ConstraintEnforcer {
         }
 
         if ( filters.size() == 0 ) {
-            throw new RuntimeException( "Constrained node was not correctly set!" );
+            constrainedNode = null;
         } else if ( filters.size() == 1 ) {
             constrainedNode = filters.poll();
         } else {
@@ -353,9 +362,14 @@ public class LogicalConstraintEnforcer extends ConstraintEnforcer {
     }
 
 
-    public static AlgNode create( AlgNode modify, Statement statement ) {
-        EnforcementInformation information = getControl( modify, statement );
-        return new LogicalConstraintEnforcer( modify.getCluster(), modify.getTraitSet(), modify, information.getControl(), information.getErrorClasses(), information.getErrorMessages() );
+    public static AlgNode create( AlgNode node, Statement statement ) {
+        EnforcementInformation information = getControl( node, statement );
+        if ( information.getControl() == null ) {
+            // there is no constraint, which is enforced {@code ON QUERY} so we return the original
+            return node;
+        } else {
+            return new LogicalConstraintEnforcer( node.getCluster(), node.getTraitSet(), node, information.getControl(), information.getErrorClasses(), information.getErrorMessages() );
+        }
     }
 
     /*public static AlgNode create( List<CatalogTable>, Statement statement ) {
