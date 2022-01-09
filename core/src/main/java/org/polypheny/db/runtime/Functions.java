@@ -102,7 +102,6 @@ import org.apache.calcite.linq4j.tree.Primitive;
 import org.polypheny.db.adapter.DataContext;
 import org.polypheny.db.adapter.enumerable.EnumerableJoin.PRE_ROUTE;
 import org.polypheny.db.adapter.enumerable.JavaRowFormat;
-import org.polypheny.db.algebra.AlgNode;
 import org.polypheny.db.algebra.exceptions.ConstraintViolationException;
 import org.polypheny.db.algebra.json.JsonConstructorNullClause;
 import org.polypheny.db.algebra.json.JsonExistsErrorBehavior;
@@ -316,7 +315,7 @@ public class Functions {
 
 
     @SuppressWarnings("unused")
-    public static void routeJoinFilter( final DataContext context, final Enumerable<Object[]> provider, AlgNode other, PRE_ROUTE side ) {
+    public static void routeJoinFilter( final DataContext context, final Enumerable<Object[]> provider, String other, PRE_ROUTE side ) {
         System.out.println( "in here" );
     }
 

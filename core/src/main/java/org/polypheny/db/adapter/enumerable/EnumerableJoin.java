@@ -34,7 +34,21 @@
 package org.polypheny.db.adapter.enumerable;
 
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.TypeAdapter;
+import com.google.gson.TypeAdapterFactory;
+import com.google.gson.reflect.TypeToken;
+import com.google.gson.stream.JsonReader;
+import com.google.gson.stream.JsonWriter;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.ObjectOutputStream;
+import java.util.Base64;
 import java.util.Set;
+import lombok.Setter;
+import lombok.SneakyThrows;
+import lombok.experimental.Accessors;
 import org.apache.calcite.linq4j.tree.BlockBuilder;
 import org.apache.calcite.linq4j.tree.Expression;
 import org.apache.calcite.linq4j.tree.Expressions;
@@ -55,6 +69,7 @@ import org.polypheny.db.plan.AlgOptCost;
 import org.polypheny.db.plan.AlgOptPlanner;
 import org.polypheny.db.plan.AlgTraitSet;
 import org.polypheny.db.rex.RexNode;
+import org.polypheny.db.schema.Schema;
 import org.polypheny.db.util.BuiltInMethod;
 import org.polypheny.db.util.ImmutableIntList;
 import org.polypheny.db.util.Util;
@@ -64,6 +79,11 @@ import org.polypheny.db.util.Util;
  * Implementation of {@link Join} in {@link EnumerableConvention enumerable calling convention}.
  */
 public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
+
+    @Setter
+    @Accessors(fluent = true)
+    private AlgNode node;
+
 
     /**
      * Creates an EnumerableJoin.
@@ -91,7 +111,7 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
         final JoinInfo joinInfo = JoinInfo.of( left, right, condition );
         assert joinInfo.isEqui();
         try {
-            return new EnumerableJoin( getCluster(), traitSet, left, right, condition, joinInfo.leftKeys, joinInfo.rightKeys, variablesSet, joinType );
+            return new EnumerableJoin( getCluster(), traitSet, left, right, condition, joinInfo.leftKeys, joinInfo.rightKeys, variablesSet, joinType ).node( node );
         } catch ( InvalidAlgException e ) {
             // Semantic error not possible. Must be a bug. Convert to internal error.
             throw new AssertionError( e );
@@ -154,12 +174,50 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
     }
 
 
+    final TypeAdapterFactory nullTypeAdapter = new TypeAdapterFactory() {
+        @SuppressWarnings("unchecked")
+        @Override
+        public <T> TypeAdapter<T> create( Gson gson, TypeToken<T> type ) {
+            if ( Schema.class.isAssignableFrom( type.getRawType() ) ) {
+                return (TypeAdapter<T>) nullAdapter;
+            }
+            if ( Class.class.isAssignableFrom( type.getRawType() ) ) {
+                return (TypeAdapter<T>) nullAdapter;
+            }
+            return null;
+        }
+
+
+        final TypeAdapter<?> nullAdapter = new TypeAdapter<Object>() {
+            @Override
+            public void write( JsonWriter out, Object value ) throws IOException {
+                out.nullValue();
+            }
+
+
+            @Override
+            public Object read( JsonReader in ) throws IOException {
+                return null;
+            }
+        };
+    };
+
+
+    @SneakyThrows
     @Override
     public Result implement( EnumerableAlgImplementor implementor, Prefer pref ) {
         BlockBuilder builder = new BlockBuilder();
         final Result leftResult = implementor.visitChild( this, 0, (EnumerableAlg) left, pref );
 
         Expression exp = builder.append( "values_" + System.nanoTime(), leftResult.block );
+
+        Gson gson = new GsonBuilder().registerTypeAdapterFactory( nullTypeAdapter ).enableComplexMapKeySerialization().serializeNulls().create();
+
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        ObjectOutputStream oos = new ObjectOutputStream( baos );
+        oos.writeObject( node );
+        oos.close();
+        String right = Base64.getEncoder().encodeToString( baos.toByteArray() );
 
         Expression result = Expressions.call( BuiltInMethod.ROUTE_JOIN_FILTER.method, Expressions.constant( DataContext.ROOT ), exp, Expressions.constant( right ), Expressions.constant( PRE_ROUTE.LEFT ) );
         builder.add( Expressions.return_( null, builder.append( "collector_" + System.nanoTime(), result ) ) );

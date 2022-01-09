@@ -22,6 +22,8 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonSerializer;
 import com.google.gson.TypeAdapter;
+import com.google.gson.TypeAdapterFactory;
+import com.google.gson.reflect.TypeToken;
 import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonWriter;
 import io.javalin.Javalin;
@@ -113,32 +115,45 @@ public class HttpServer implements Runnable {
             jsonStore.add( "adapterSettings", context.serialize( src.settings ) );
             return jsonStore;
         };
-        TypeAdapter<Throwable> throwableTypeAdapter = new TypeAdapter<Throwable>() {
+        TypeAdapterFactory throwableTypeAdapterFactory = new TypeAdapterFactory() {
+            @SuppressWarnings("unchecked")
             @Override
-            public void write( JsonWriter out, Throwable value ) throws IOException {
-                if ( value != null ) {
-                    out.beginObject();
-                    out.name( "message" );
-                    out.value( value.getMessage() );
-                    out.endObject();
-                } else {
-                    out.nullValue();
+            public <T> TypeAdapter<T> create( Gson gson, TypeToken<T> type ) {
+                if ( !Throwable.class.isAssignableFrom( type.getRawType() ) ) {
+                    return null;
                 }
+                return (TypeAdapter<T>) throwableTypeAdapter;
             }
 
 
-            @Override
-            public Throwable read( JsonReader in ) throws IOException {
-                return new Throwable( in.nextString() );
-            }
+            final TypeAdapter<Throwable> throwableTypeAdapter = new TypeAdapter<Throwable>() {
+                @Override
+                public void write( JsonWriter out, Throwable value ) throws IOException {
+                    if ( value != null ) {
+                        out.beginObject();
+                        out.name( "message" );
+                        out.value( value.getMessage() );
+                        out.endObject();
+                    } else {
+                        out.nullValue();
+                    }
+                }
+
+
+                @Override
+                public Throwable read( JsonReader in ) throws IOException {
+                    return new Throwable( in.nextString() );
+                }
+            };
         };
+
         gson = new GsonBuilder()
                 .registerTypeAdapter( DataSource.class, sourceSerializer )
                 .registerTypeAdapter( DataStore.class, storeSerializer )
                 .registerTypeAdapter( PolyType.class, PolyType.serializer )
                 .registerTypeAdapter( AdapterInformation.class, adapterSerializer )
                 .registerTypeAdapter( AbstractAdapterSetting.class, new AdapterSettingDeserializer() )
-                .registerTypeAdapter( Throwable.class, throwableTypeAdapter )
+                .registerTypeAdapterFactory( throwableTypeAdapterFactory )
                 .registerTypeAdapter( InformationDuration.class, InformationDuration.getSerializer() )
                 .registerTypeAdapter( Duration.class, Duration.getSerializer() )
                 .create();

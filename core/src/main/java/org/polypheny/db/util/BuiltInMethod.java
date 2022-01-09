@@ -78,7 +78,6 @@ import org.polypheny.db.adapter.enumerable.OrderedAggregateLambdaFactory;
 import org.polypheny.db.adapter.enumerable.SequencedAdderAggregateLambdaFactory;
 import org.polypheny.db.adapter.enumerable.SourceSorter;
 import org.polypheny.db.adapter.java.ReflectiveSchema;
-import org.polypheny.db.algebra.AlgNode;
 import org.polypheny.db.algebra.constant.ExplainLevel;
 import org.polypheny.db.algebra.json.JsonConstructorNullClause;
 import org.polypheny.db.algebra.json.JsonQueryEmptyOrErrorBehavior;
@@ -138,7 +137,7 @@ import org.polypheny.db.type.PolyType;
  * Built-in methods.
  */
 public enum BuiltInMethod {
-    ROUTE_JOIN_FILTER( Functions.class, "routeJoinFilter", DataContext.class, Enumerable.class, AlgNode.class, PRE_ROUTE.class ),
+    ROUTE_JOIN_FILTER( Functions.class, "routeJoinFilter", DataContext.class, Enumerable.class, String.class, PRE_ROUTE.class ),
     STREAM( Functions.class, "stream", DataContext.class, Enumerable.class, List.class ),
     BATCH( Functions.class, "batch", DataContext.class, Enumerable.class ),
     INTO_CONTEXT( Functions.class, "intoContext", DataContext.class, Enumerable.class, List.class ),

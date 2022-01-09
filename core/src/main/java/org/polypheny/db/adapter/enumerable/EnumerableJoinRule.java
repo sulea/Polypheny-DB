@@ -81,7 +81,7 @@ class EnumerableJoinRule extends ConverterRule {
         }
         AlgNode newAlg;
         try {
-            newAlg = EnumerableJoin.create( left, right, info.getEquiCondition( left, right, cluster.getRexBuilder() ), info.leftKeys, info.rightKeys, join.getVariablesSet(), join.getJoinType() );
+            newAlg = EnumerableJoin.create( left, right, info.getEquiCondition( left, right, cluster.getRexBuilder() ), info.leftKeys, info.rightKeys, join.getVariablesSet(), join.getJoinType() ).node( join );
         } catch ( InvalidAlgException e ) {
             EnumerableRules.LOGGER.debug( e.toString() );
             return null;
