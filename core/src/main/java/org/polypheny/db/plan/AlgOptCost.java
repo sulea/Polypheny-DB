@@ -34,6 +34,7 @@
 package org.polypheny.db.plan;
 
 
+import java.io.Serializable;
 import org.polypheny.db.algebra.AlgNode;
 
 /**
@@ -43,7 +44,7 @@ import org.polypheny.db.algebra.AlgNode;
  * can override this by plugging in their own cost models with well-defined meanings for each unit. Optimizers which supply
  * their own cost models may also extend this interface with additional cost metrics such as memory usage.
  */
-public interface AlgOptCost {
+public interface AlgOptCost extends Serializable {
 
     /**
      * @return number of rows processed; this should not be confused with the row count produced by a relational expression

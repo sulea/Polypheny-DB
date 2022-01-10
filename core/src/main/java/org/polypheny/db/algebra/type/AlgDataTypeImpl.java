@@ -362,7 +362,7 @@ public abstract class AlgDataTypeImpl implements AlgDataType, AlgDataTypeFamily 
      */
     public static AlgProtoDataType proto( final AlgDataType protoType ) {
         assert protoType != null;
-        return typeFactory -> typeFactory.copyType( protoType );
+        return (AlgProtoDataType & Serializable) typeFactory -> typeFactory.copyType( protoType );
     }
 
 
@@ -377,7 +377,7 @@ public abstract class AlgDataTypeImpl implements AlgDataType, AlgDataTypeFamily 
      */
     public static AlgProtoDataType proto( final PolyType typeName, final boolean nullable ) {
         assert typeName != null;
-        return typeFactory -> {
+        return (AlgProtoDataType & Serializable) typeFactory -> {
             final AlgDataType type = typeFactory.createPolyType( typeName );
             return typeFactory.createTypeWithNullability( type, nullable );
         };
@@ -396,7 +396,7 @@ public abstract class AlgDataTypeImpl implements AlgDataType, AlgDataTypeFamily 
      */
     public static AlgProtoDataType proto( final PolyType typeName, final int precision, final boolean nullable ) {
         assert typeName != null;
-        return typeFactory -> {
+        return (AlgProtoDataType & Serializable) typeFactory -> {
             final AlgDataType type = typeFactory.createPolyType( typeName, precision );
             return typeFactory.createTypeWithNullability( type, nullable );
         };
@@ -415,7 +415,7 @@ public abstract class AlgDataTypeImpl implements AlgDataType, AlgDataTypeFamily 
      * @return Proto data type
      */
     public static AlgProtoDataType proto( final PolyType typeName, final int precision, final int scale, final boolean nullable ) {
-        return typeFactory -> {
+        return (AlgProtoDataType & Serializable) typeFactory -> {
             final AlgDataType type = typeFactory.createPolyType( typeName, precision, scale );
             return typeFactory.createTypeWithNullability( type, nullable );
         };

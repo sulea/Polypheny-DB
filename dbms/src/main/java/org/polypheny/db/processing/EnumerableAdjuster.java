@@ -249,7 +249,7 @@ public class EnumerableAdjuster {
         }
 
 
-        private static class ConditionExtractor extends RexShuttle {
+        public static class ConditionExtractor extends RexShuttle {
 
             private final boolean preRouteRight;
             private final RexBuilder rexBuilder;

@@ -64,16 +64,16 @@ import org.polypheny.db.type.PolyTypeFactoryImpl;
 public class MongoSchema extends AbstractSchema {
 
     @Getter
-    final MongoDatabase database;
+    final transient MongoDatabase database;
 
     @Getter
     private final Convention convention = MongoAlg.CONVENTION;
 
     private final Map<String, Table> tableMap;
-    private final MongoClient connection;
-    private final TransactionProvider transactionProvider;
+    private final transient MongoClient connection;
+    private final transient TransactionProvider transactionProvider;
     @Getter
-    private final GridFSBucket bucket;
+    private final transient GridFSBucket bucket;
 
 
     /**

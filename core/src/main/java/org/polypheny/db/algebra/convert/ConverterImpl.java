@@ -50,7 +50,7 @@ import org.polypheny.db.plan.AlgTraitSet;
 public abstract class ConverterImpl extends SingleAlg implements Converter {
 
     protected AlgTraitSet inTraits;
-    protected final AlgTraitDef traitDef;
+    protected final transient AlgTraitDef traitDef;
 
 
     /**

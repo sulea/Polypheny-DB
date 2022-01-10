@@ -34,6 +34,7 @@
 package org.polypheny.db.plan;
 
 
+import java.io.Serializable;
 import java.util.List;
 import org.apache.calcite.linq4j.tree.Expression;
 import org.polypheny.db.algebra.AlgCollation;
@@ -53,7 +54,7 @@ import org.polypheny.db.util.ImmutableBitSet;
 /**
  * Represents a relational dataset in a {@link AlgOptSchema}. It has methods to describe and implement itself.
  */
-public interface AlgOptTable extends Wrapper {
+public interface AlgOptTable extends Wrapper, Serializable {
 
     /**
      * Obtains an identifier for this table. The identifier must be unique with respect to the Connection producing this table.

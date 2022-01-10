@@ -36,6 +36,7 @@ package org.polypheny.db.runtime;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import java.io.Serializable;
 import java.util.AbstractList;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -301,7 +302,7 @@ public class FlatLists {
      *
      * @param <T> element type
      */
-    public abstract static class AbstractFlatList<T> extends AbstractImmutableList<T> implements RandomAccess {
+    public abstract static class AbstractFlatList<T> extends AbstractImmutableList<T> implements RandomAccess, Serializable {
 
         @Override
         protected final List<T> toList() {

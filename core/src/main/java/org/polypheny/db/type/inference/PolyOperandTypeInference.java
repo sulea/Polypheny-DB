@@ -17,6 +17,7 @@
 package org.polypheny.db.type.inference;
 
 
+import java.io.Serializable;
 import org.polypheny.db.algebra.type.AlgDataType;
 import org.polypheny.db.nodes.CallBinding;
 
@@ -24,7 +25,7 @@ import org.polypheny.db.nodes.CallBinding;
 /**
  * Strategy to infer unknown types of the operands of an operator call.
  */
-public interface PolyOperandTypeInference {
+public interface PolyOperandTypeInference extends Serializable {
 
     /**
      * Infers any unknown operand types.

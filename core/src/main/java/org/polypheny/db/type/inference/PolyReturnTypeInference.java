@@ -17,6 +17,7 @@
 package org.polypheny.db.type.inference;
 
 
+import java.io.Serializable;
 import org.polypheny.db.algebra.type.AlgDataType;
 import org.polypheny.db.nodes.OperatorBinding;
 import org.polypheny.db.nodes.OperatorImpl;
@@ -29,7 +30,7 @@ import org.polypheny.db.util.Glossary;
  * This interface is an example of the {@link Glossary#STRATEGY_PATTERN strategy pattern}. This makes sense because many
  * operators have similar, straightforward strategies, such as to take the type of the first operand.
  */
-public interface PolyReturnTypeInference {
+public interface PolyReturnTypeInference extends Serializable {
 
     /**
      * Infers the return type of a call to an {@link OperatorImpl}.

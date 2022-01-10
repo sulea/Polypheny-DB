@@ -34,6 +34,7 @@
 package org.polypheny.db.type;
 
 
+import java.io.Serializable;
 import java.util.List;
 import java.util.Objects;
 import org.polypheny.db.algebra.type.AlgDataType;
@@ -50,13 +51,13 @@ import org.polypheny.db.util.Util;
  * reusable top-level class. If you find yourself copying and pasting an existing strategy's anonymous inner class,
  * you're making a mistake.
  */
-public abstract class PolyTypeTransforms {
+public abstract class PolyTypeTransforms implements Serializable {
 
     /**
      * Parameter type-inference transform strategy where a derived type is transformed into the same type but nullable
      * if any of a calls operands is nullable
      */
-    public static final PolyTypeTransform TO_NULLABLE =
+    public static final PolyTypeTransform TO_NULLABLE = (PolyTypeTransform & Serializable)
             ( opBinding, typeToTransform ) ->
                     PolyTypeUtil.makeNullableIfOperandsAre(
                             opBinding.getTypeFactory(),
@@ -67,7 +68,7 @@ public abstract class PolyTypeTransforms {
      * Parameter type-inference transform strategy where a derived type is transformed into the same type, but nullable if
      * and only if all of a call's operands are nullable.
      */
-    public static final PolyTypeTransform TO_NULLABLE_ALL = ( opBinding, type ) -> {
+    public static final PolyTypeTransform TO_NULLABLE_ALL = (PolyTypeTransform & Serializable) ( opBinding, type ) -> {
         final AlgDataTypeFactory typeFactory = opBinding.getTypeFactory();
         return typeFactory.createTypeWithNullability( type, PolyTypeUtil.allNullable( opBinding.collectOperandTypes() ) );
     };
@@ -75,7 +76,7 @@ public abstract class PolyTypeTransforms {
     /**
      * Parameter type-inference transform strategy where a derived type is transformed into the same type but not nullable.
      */
-    public static final PolyTypeTransform TO_NOT_NULLABLE =
+    public static final PolyTypeTransform TO_NOT_NULLABLE = (PolyTypeTransform & Serializable)
             ( opBinding, typeToTransform ) ->
                     opBinding.getTypeFactory().createTypeWithNullability(
                             Objects.requireNonNull( typeToTransform ),
@@ -84,7 +85,7 @@ public abstract class PolyTypeTransforms {
     /**
      * Parameter type-inference transform strategy where a derived type is transformed into the same type with nulls allowed.
      */
-    public static final PolyTypeTransform FORCE_NULLABLE =
+    public static final PolyTypeTransform FORCE_NULLABLE = (PolyTypeTransform & Serializable)
             ( opBinding, typeToTransform ) ->
                     opBinding.getTypeFactory().createTypeWithNullability(
                             Objects.requireNonNull( typeToTransform ),
@@ -93,7 +94,7 @@ public abstract class PolyTypeTransforms {
     /**
      * Type-inference strategy whereby the result is NOT NULL if any of the arguments is NOT NULL; otherwise the type is unchanged.
      */
-    public static final PolyTypeTransform LEAST_NULLABLE =
+    public static final PolyTypeTransform LEAST_NULLABLE = (PolyTypeTransform & Serializable)
             ( opBinding, typeToTransform ) -> {
                 for ( AlgDataType type : opBinding.collectOperandTypes() ) {
                     if ( !type.isNullable() ) {
@@ -153,20 +154,20 @@ public abstract class PolyTypeTransforms {
      *
      * @see MultisetPolyType#getComponentType
      */
-    public static final PolyTypeTransform TO_MULTISET_ELEMENT_TYPE = ( opBinding, typeToTransform ) -> typeToTransform.getComponentType();
+    public static final PolyTypeTransform TO_MULTISET_ELEMENT_TYPE = (PolyTypeTransform & Serializable) ( opBinding, typeToTransform ) -> typeToTransform.getComponentType();
 
     /**
      * Parameter type-inference transform strategy that wraps a given type in a multiset.
      *
      * @see AlgDataTypeFactory#createMultisetType(AlgDataType, long)
      */
-    public static final PolyTypeTransform TO_MULTISET = ( opBinding, typeToTransform ) -> opBinding.getTypeFactory().createMultisetType( typeToTransform, -1 );
+    public static final PolyTypeTransform TO_MULTISET = (PolyTypeTransform & Serializable) ( opBinding, typeToTransform ) -> opBinding.getTypeFactory().createMultisetType( typeToTransform, -1 );
 
     /**
      * Parameter type-inference transform strategy where a derived type must be a struct type with precisely one field and
      * the returned type is the type of that field.
      */
-    public static final PolyTypeTransform ONLY_COLUMN =
+    public static final PolyTypeTransform ONLY_COLUMN = (PolyTypeTransform & Serializable)
             ( opBinding, typeToTransform ) -> {
                 final List<AlgDataTypeField> fields = typeToTransform.getFieldList();
                 assert fields.size() == 1;

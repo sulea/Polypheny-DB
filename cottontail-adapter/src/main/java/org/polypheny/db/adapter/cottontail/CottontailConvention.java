@@ -32,7 +32,7 @@ public class CottontailConvention extends Convention.Impl {
     public static final double COST_MULTIPLIER = 0.8d;
 
 
-    public final Expression expression;
+    public final transient Expression expression;
 
     @Getter
     @Setter

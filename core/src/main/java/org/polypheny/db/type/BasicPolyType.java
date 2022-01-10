@@ -53,7 +53,7 @@ public class BasicPolyType extends AbstractPolyType {
 
     private final int precision;
     private final int scale;
-    private final AlgDataTypeSystem typeSystem;
+    private final transient AlgDataTypeSystem typeSystem;
     @Getter
     private final Collation collation;
     private final SerializableCharset wrappedCharset;

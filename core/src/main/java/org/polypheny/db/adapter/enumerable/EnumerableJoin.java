@@ -34,24 +34,18 @@
 package org.polypheny.db.adapter.enumerable;
 
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.TypeAdapter;
-import com.google.gson.TypeAdapterFactory;
-import com.google.gson.reflect.TypeToken;
-import com.google.gson.stream.JsonReader;
-import com.google.gson.stream.JsonWriter;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.ObjectOutputStream;
-import java.util.Base64;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
+import lombok.Getter;
 import lombok.Setter;
-import lombok.SneakyThrows;
 import lombok.experimental.Accessors;
 import org.apache.calcite.linq4j.tree.BlockBuilder;
 import org.apache.calcite.linq4j.tree.Expression;
 import org.apache.calcite.linq4j.tree.Expressions;
+import org.apache.calcite.linq4j.tree.ParameterExpression;
 import org.polypheny.db.adapter.DataContext;
 import org.polypheny.db.algebra.AlgCollationTraitDef;
 import org.polypheny.db.algebra.AlgNode;
@@ -68,8 +62,12 @@ import org.polypheny.db.plan.AlgOptCluster;
 import org.polypheny.db.plan.AlgOptCost;
 import org.polypheny.db.plan.AlgOptPlanner;
 import org.polypheny.db.plan.AlgTraitSet;
+import org.polypheny.db.rex.RexBuilder;
+import org.polypheny.db.rex.RexCall;
+import org.polypheny.db.rex.RexInputRef;
 import org.polypheny.db.rex.RexNode;
-import org.polypheny.db.schema.Schema;
+import org.polypheny.db.rex.RexShuttle;
+import org.polypheny.db.serialize.Serializer;
 import org.polypheny.db.util.BuiltInMethod;
 import org.polypheny.db.util.ImmutableIntList;
 import org.polypheny.db.util.Util;
@@ -174,36 +172,6 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
     }
 
 
-    final TypeAdapterFactory nullTypeAdapter = new TypeAdapterFactory() {
-        @SuppressWarnings("unchecked")
-        @Override
-        public <T> TypeAdapter<T> create( Gson gson, TypeToken<T> type ) {
-            if ( Schema.class.isAssignableFrom( type.getRawType() ) ) {
-                return (TypeAdapter<T>) nullAdapter;
-            }
-            if ( Class.class.isAssignableFrom( type.getRawType() ) ) {
-                return (TypeAdapter<T>) nullAdapter;
-            }
-            return null;
-        }
-
-
-        final TypeAdapter<?> nullAdapter = new TypeAdapter<Object>() {
-            @Override
-            public void write( JsonWriter out, Object value ) throws IOException {
-                out.nullValue();
-            }
-
-
-            @Override
-            public Object read( JsonReader in ) throws IOException {
-                return null;
-            }
-        };
-    };
-
-
-    @SneakyThrows
     @Override
     public Result implement( EnumerableAlgImplementor implementor, Prefer pref ) {
         BlockBuilder builder = new BlockBuilder();
@@ -211,15 +179,14 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
 
         Expression exp = builder.append( "values_" + System.nanoTime(), leftResult.block );
 
-        Gson gson = new GsonBuilder().registerTypeAdapterFactory( nullTypeAdapter ).enableComplexMapKeySerialization().serializeNulls().create();
+        byte[] nodeArray = Serializer.conf.asByteArray( node );
+        byte[] compressed = Serializer.compress( nodeArray );
 
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        ObjectOutputStream oos = new ObjectOutputStream( baos );
-        oos.writeObject( node );
-        oos.close();
-        String right = Base64.getEncoder().encodeToString( baos.toByteArray() );
+        String name = builder.newName( "join_" + System.nanoTime() );
+        ParameterExpression nameExpr = Expressions.parameter( byte[].class, name );
+        implementor.getNodes().put( nameExpr, compressed );
 
-        Expression result = Expressions.call( BuiltInMethod.ROUTE_JOIN_FILTER.method, Expressions.constant( DataContext.ROOT ), exp, Expressions.constant( right ), Expressions.constant( PRE_ROUTE.LEFT ) );
+        Expression result = Expressions.call( BuiltInMethod.ROUTE_JOIN_FILTER.method, Expressions.constant( DataContext.ROOT ), exp, nameExpr, Expressions.constant( PRE_ROUTE.LEFT ) );
         builder.add( Expressions.return_( null, builder.append( "collector_" + System.nanoTime(), result ) ) );
 
         final PhysType physType =
@@ -234,6 +201,84 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
     public enum PRE_ROUTE {
         LEFT,
         RIGHT
+    }
+
+
+    public static class ConditionExtractor extends RexShuttle {
+
+        private final boolean preRouteRight;
+        private final RexBuilder rexBuilder;
+        private final long leftSize;
+
+        @Getter
+        private final List<RexNode> filters = new ArrayList<>();
+        @Getter
+        private final List<RexInputRef> projects = new ArrayList<>();
+        @Getter
+        private final List<RexInputRef> otherProjects = new ArrayList<>();
+
+
+        public ConditionExtractor( boolean preRouteRight, RexBuilder rexBuilder, long leftSize ) {
+            this.preRouteRight = preRouteRight;
+            this.rexBuilder = rexBuilder;
+            this.leftSize = leftSize;
+        }
+
+
+        @Override
+        public RexNode visitInputRef( RexInputRef inputRef ) {
+            RexInputRef project = null;
+            RexInputRef otherProject = null;
+
+            if ( inputRef.getIndex() >= leftSize ) {
+                // is from right
+                if ( preRouteRight ) {
+                    project = rexBuilder.makeInputRef( inputRef.getType(), (int) (inputRef.getIndex() - leftSize) );
+                } else {
+                    // add not routed ref into other projection collection to use it after
+                    otherProject = rexBuilder.makeInputRef( inputRef.getType(), (int) (inputRef.getIndex() - leftSize) );
+                }
+            } else {
+                // is from left
+                if ( !preRouteRight ) {
+                    project = rexBuilder.makeInputRef( inputRef.getType(), inputRef.getIndex() );
+                } else {
+                    otherProject = rexBuilder.makeInputRef( inputRef.getType(), inputRef.getIndex() );
+                }
+            }
+
+            if ( project != null ) {
+                projects.add( project );
+            }
+            if ( otherProject != null ) {
+                otherProjects.add( otherProject );
+            }
+
+            return project;
+        }
+
+
+        @Override
+        public RexNode visitCall( RexCall call ) {
+            List<RexNode> nodes = call.operands.stream().map( c -> c.accept( this ) ).filter( Objects::nonNull ).collect( Collectors.toList() );
+
+            if ( nodes.size() == 1 ) {
+                return nodes.get( 0 );
+            } else if ( nodes.size() == 0 ) {
+                return null;
+            }
+
+            switch ( call.op.getOperatorName() ) {
+                case EQUALS:
+                case NOT_EQUALS:
+                    filters.add( rexBuilder.makeCall( call.op, nodes ) );
+                case AND:
+                case OR:
+                default:
+                    return call;
+            }
+        }
+
     }
 
     /*@Override

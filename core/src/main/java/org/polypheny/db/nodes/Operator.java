@@ -16,6 +16,7 @@
 
 package org.polypheny.db.nodes;
 
+import java.io.Serializable;
 import java.util.List;
 import org.polypheny.db.algebra.constant.Kind;
 import org.polypheny.db.algebra.constant.Monotonicity;
@@ -30,7 +31,7 @@ import org.polypheny.db.nodes.validate.Validator;
 import org.polypheny.db.nodes.validate.ValidatorScope;
 import org.polypheny.db.util.Litmus;
 
-public interface Operator {
+public interface Operator extends Serializable {
 
     String NL = System.getProperty( "line.separator" );
 

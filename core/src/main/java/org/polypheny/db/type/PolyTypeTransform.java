@@ -34,6 +34,7 @@
 package org.polypheny.db.type;
 
 
+import java.io.Serializable;
 import org.polypheny.db.algebra.type.AlgDataType;
 import org.polypheny.db.nodes.OperatorBinding;
 
@@ -45,7 +46,7 @@ import org.polypheny.db.nodes.OperatorBinding;
  * <p>
  * This class is an example of the {@link org.polypheny.db.util.Glossary#STRATEGY_PATTERN strategy pattern}.
  */
-public interface PolyTypeTransform {
+public interface PolyTypeTransform extends Serializable {
 
     /**
      * Transforms a type.

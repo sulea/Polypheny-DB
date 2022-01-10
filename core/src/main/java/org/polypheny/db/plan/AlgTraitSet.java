@@ -35,6 +35,7 @@ package org.polypheny.db.plan;
 
 
 import com.google.common.collect.ImmutableList;
+import java.io.Serializable;
 import java.util.AbstractList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -48,11 +49,11 @@ import org.polypheny.db.util.Pair;
 /**
  * RelTraitSet represents an ordered set of {@link AlgTrait}s.
  */
-public final class AlgTraitSet extends AbstractList<AlgTrait> {
+public final class AlgTraitSet extends AbstractList<AlgTrait> implements Serializable {
 
     private static final AlgTrait[] EMPTY_TRAITS = new AlgTrait[0];
 
-    private final Cache cache;
+    private final transient Cache cache;
     private final AlgTrait[] traits;
     private final String string;
 

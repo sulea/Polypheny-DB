@@ -34,6 +34,7 @@
 package org.polypheny.db.schema;
 
 
+import java.io.Serializable;
 import java.util.Collection;
 import java.util.Set;
 import org.apache.calcite.linq4j.tree.Expression;
@@ -61,7 +62,7 @@ import org.polypheny.db.algebra.type.AlgProtoDataType;
  *
  * A schema may be nested within another schema; see {@link Schema#getSubSchema(String)}.
  */
-public interface Schema {
+public interface Schema extends Serializable {
 
     /**
      * Returns a table with a given name, or null if not found.

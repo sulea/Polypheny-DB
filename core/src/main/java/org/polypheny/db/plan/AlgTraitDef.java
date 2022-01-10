@@ -36,6 +36,7 @@ package org.polypheny.db.plan;
 
 import com.google.common.collect.Interner;
 import com.google.common.collect.Interners;
+import java.io.Serializable;
 import org.polypheny.db.algebra.AlgNode;
 import org.polypheny.db.algebra.convert.ConverterRule;
 
@@ -59,14 +60,14 @@ import org.polypheny.db.algebra.convert.ConverterRule;
  *
  * @param <T> Trait that this trait definition is based upon
  */
-public abstract class AlgTraitDef<T extends AlgTrait> {
+public abstract class AlgTraitDef<T extends AlgTrait> implements Serializable {
 
     /**
      * Cache of traits.
      *
      * Uses weak interner to allow GC.
      */
-    private final Interner<T> interner = Interners.newWeakInterner();
+    private final transient Interner<T> interner = Interners.newWeakInterner();
 
 
     protected AlgTraitDef() {

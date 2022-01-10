@@ -137,7 +137,7 @@ import org.polypheny.db.type.PolyType;
  * Built-in methods.
  */
 public enum BuiltInMethod {
-    ROUTE_JOIN_FILTER( Functions.class, "routeJoinFilter", DataContext.class, Enumerable.class, String.class, PRE_ROUTE.class ),
+    ROUTE_JOIN_FILTER( Functions.class, "routeJoinFilter", DataContext.class, Enumerable.class, byte[].class, PRE_ROUTE.class ),
     STREAM( Functions.class, "stream", DataContext.class, Enumerable.class, List.class ),
     BATCH( Functions.class, "batch", DataContext.class, Enumerable.class ),
     INTO_CONTEXT( Functions.class, "intoContext", DataContext.class, Enumerable.class, List.class ),

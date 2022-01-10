@@ -35,6 +35,7 @@ package org.polypheny.db.plan.volcano;
 
 
 import com.google.common.collect.ImmutableList;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -57,7 +58,7 @@ import org.slf4j.Logger;
  *
  * All of the expressions in an <code>AlgSet</code> have the same calling convention.
  */
-class AlgSet {
+class AlgSet implements Serializable {
 
     private static final Logger LOGGER = PolyphenyDbTrace.getPlannerTracer();
 

@@ -84,6 +84,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.calcite.avatica.util.ByteString;
 import org.apache.calcite.avatica.util.DateTimeUtils;
@@ -99,19 +100,33 @@ import org.apache.calcite.linq4j.function.Experimental;
 import org.apache.calcite.linq4j.function.Function1;
 import org.apache.calcite.linq4j.function.NonDeterministic;
 import org.apache.calcite.linq4j.tree.Primitive;
+import org.polypheny.db.PolyResult;
 import org.polypheny.db.adapter.DataContext;
 import org.polypheny.db.adapter.enumerable.EnumerableJoin.PRE_ROUTE;
 import org.polypheny.db.adapter.enumerable.JavaRowFormat;
+import org.polypheny.db.algebra.AlgNode;
+import org.polypheny.db.algebra.AlgRoot;
+import org.polypheny.db.algebra.constant.Kind;
 import org.polypheny.db.algebra.exceptions.ConstraintViolationException;
 import org.polypheny.db.algebra.json.JsonConstructorNullClause;
 import org.polypheny.db.algebra.json.JsonExistsErrorBehavior;
 import org.polypheny.db.algebra.json.JsonQueryEmptyOrErrorBehavior;
 import org.polypheny.db.algebra.json.JsonQueryWrapperBehavior;
 import org.polypheny.db.algebra.json.JsonValueEmptyOrErrorBehavior;
+import org.polypheny.db.algebra.logical.LogicalJoin;
+import org.polypheny.db.algebra.operators.OperatorName;
 import org.polypheny.db.algebra.type.AlgDataType;
 import org.polypheny.db.algebra.type.AlgDataTypeSystem;
 import org.polypheny.db.interpreter.Row;
+import org.polypheny.db.languages.OperatorRegistry;
+import org.polypheny.db.rex.RexBuilder;
+import org.polypheny.db.rex.RexCall;
+import org.polypheny.db.rex.RexInputRef;
+import org.polypheny.db.rex.RexNode;
+import org.polypheny.db.rex.RexShuttle;
 import org.polypheny.db.runtime.FlatLists.ComparableList;
+import org.polypheny.db.serialize.Serializer;
+import org.polypheny.db.tools.AlgBuilder;
 import org.polypheny.db.type.PolyType;
 import org.polypheny.db.type.PolyTypeFactoryImpl;
 import org.polypheny.db.type.PolyTypeUtil;
@@ -315,8 +330,137 @@ public class Functions {
 
 
     @SuppressWarnings("unused")
-    public static void routeJoinFilter( final DataContext context, final Enumerable<Object[]> provider, String other, PRE_ROUTE side ) {
-        System.out.println( "in here" );
+    public static Enumerable<?> routeJoinFilter( final DataContext context, final Enumerable<Object[]> baz, byte[] other, PRE_ROUTE preRoute ) {
+        byte[] uncompressed = Serializer.decompress( other );
+        LogicalJoin node = (LogicalJoin) Serializer.conf.asObject( uncompressed );
+        List<Object[]> filters = new ArrayList<>();
+        for ( Object[] objects : baz ) {
+            filters.add( objects );
+        }
+        AlgBuilder builder = AlgBuilder.create( context.getStatement() );
+        RexBuilder rexBuilder = builder.getRexBuilder();
+        boolean preRouteRight = preRoute == PRE_ROUTE.RIGHT;
+
+        ConditionExtractor extractor = new ConditionExtractor( preRouteRight, rexBuilder, node.getLeft().getRowType().getFieldCount() );
+
+        node.accept( extractor );
+
+        builder.push( preRouteRight ? node.getLeft() : node.getRight() );
+
+        List<RexNode> nodes = new ArrayList<>();
+
+        for ( Object[] row : filters ) {
+            List<RexNode> ands = new ArrayList<>();
+            int pos = 0;
+            for ( Object o : row ) {
+                RexInputRef ref = extractor.otherProjects.get( pos );
+                ands.add(
+                        rexBuilder.makeCall(
+                                OperatorRegistry.get( OperatorName.EQUALS ),
+                                builder.field( ref.getIndex() ),
+                                rexBuilder.makeLiteral( o, ref.getType(), false ) ) );
+                pos++;
+            }
+            if ( ands.size() > 1 ) {
+                nodes.add( rexBuilder.makeCall( OperatorRegistry.get( OperatorName.AND ), ands ) );
+            } else {
+                nodes.add( ands.get( 0 ) );
+            }
+        }
+        AlgNode prepared;
+        if ( nodes.size() > 1 ) {
+            prepared = builder.filter( rexBuilder.makeCall( OperatorRegistry.get( OperatorName.OR ), nodes ) ).build();
+        } else if ( nodes.size() == 1 ) {
+            prepared = builder.filter( nodes.get( 0 ) ).build();
+        } else {
+            // there seems to be nothing in the pre-routed side, maybe we use an empty values?
+            prepared = preRouteRight ? node.getLeft() : node.getRight();
+        }
+        builder.push( preRouteRight ? prepared : node.getLeft() );
+        builder.push( preRouteRight ? node.getRight() : prepared );
+        builder.join( node.getJoinType(), node.getCondition() );
+
+        PolyResult result = context.getStatement().getQueryProcessor().prepareQuery( AlgRoot.of( builder.build(), Kind.SELECT ), false );
+
+        return result.enumerable( context );
+    }
+
+
+    public static class ConditionExtractor extends RexShuttle {
+
+        private final boolean preRouteRight;
+        private final RexBuilder rexBuilder;
+        private final long leftSize;
+
+        @Getter
+        private final List<RexNode> filters = new ArrayList<>();
+        @Getter
+        private final List<RexInputRef> projects = new ArrayList<>();
+        @Getter
+        private final List<RexInputRef> otherProjects = new ArrayList<>();
+
+
+        public ConditionExtractor( boolean preRouteRight, RexBuilder rexBuilder, long leftSize ) {
+            this.preRouteRight = preRouteRight;
+            this.rexBuilder = rexBuilder;
+            this.leftSize = leftSize;
+        }
+
+
+        @Override
+        public RexNode visitInputRef( RexInputRef inputRef ) {
+            RexInputRef project = null;
+            RexInputRef otherProject = null;
+
+            if ( inputRef.getIndex() >= leftSize ) {
+                // is from right
+                if ( preRouteRight ) {
+                    project = rexBuilder.makeInputRef( inputRef.getType(), (int) (inputRef.getIndex() - leftSize) );
+                } else {
+                    // add not routed ref into other projection collection to use it after
+                    otherProject = rexBuilder.makeInputRef( inputRef.getType(), (int) (inputRef.getIndex() - leftSize) );
+                }
+            } else {
+                // is from left
+                if ( !preRouteRight ) {
+                    project = rexBuilder.makeInputRef( inputRef.getType(), inputRef.getIndex() );
+                } else {
+                    otherProject = rexBuilder.makeInputRef( inputRef.getType(), inputRef.getIndex() );
+                }
+            }
+
+            if ( project != null ) {
+                projects.add( project );
+            }
+            if ( otherProject != null ) {
+                otherProjects.add( otherProject );
+            }
+
+            return project;
+        }
+
+
+        @Override
+        public RexNode visitCall( RexCall call ) {
+            List<RexNode> nodes = call.operands.stream().map( c -> c.accept( this ) ).filter( Objects::nonNull ).collect( Collectors.toList() );
+
+            if ( nodes.size() == 1 ) {
+                return nodes.get( 0 );
+            } else if ( nodes.size() == 0 ) {
+                return null;
+            }
+
+            switch ( call.op.getOperatorName() ) {
+                case EQUALS:
+                case NOT_EQUALS:
+                    filters.add( rexBuilder.makeCall( call.op, nodes ) );
+                case AND:
+                case OR:
+                default:
+                    return call;
+            }
+        }
+
     }
 
 

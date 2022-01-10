@@ -33,6 +33,7 @@
 
 package org.polypheny.db.schema;
 
+import java.io.Serializable;
 import org.polypheny.db.algebra.type.AlgDataType;
 import org.polypheny.db.algebra.type.AlgDataTypeFactory;
 import org.polypheny.db.catalog.Catalog.SchemaType;
@@ -53,7 +54,7 @@ import org.polypheny.db.nodes.Node;
  *
  * @see TableMacro
  */
-public interface Table {
+public interface Table extends Serializable {
 
     /**
      * Returns this table's row type.

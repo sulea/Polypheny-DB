@@ -72,6 +72,7 @@ dependencies {
     testImplementation group: "org.apache.commons", name: "commons-pool2", version: commons_pool2_version // Apache 2.0
 
     testImplementation group: "org.mockito", name: "mockito-core", version: mockito_core_version  // MIT
+    implementation group: 'de.ruedigermoeller', name: 'fst', version: '2.57' // Apache 2.0
 
     //testImplementation group: "org.apache.calcite", name: "calcite-linq4j", version: calcite_linq4j_version  // Apache 2.0
     //testImplementation group: "com.h2database", name: "h2", version: h2_version

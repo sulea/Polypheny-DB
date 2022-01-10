@@ -48,6 +48,8 @@ dependencies {
     implementation group: "org.apache.commons", name: "commons-math3", version: commons_math_version  // Apache 2.0
     implementation group: "com.j256.simplemagic", name: "simplemagic", version: simplemagic_version // ISC
 
+    implementation group: 'de.ruedigermoeller', name: 'fst', version: '2.57' // Apache 2.0
+
 
     // --- Test Compile ---
     testImplementation project(path: ":core", configuration: "tests")

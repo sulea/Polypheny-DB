@@ -19,6 +19,7 @@ package org.polypheny.db.adapter.cottontail;
 import io.grpc.ManagedChannel;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
+import java.io.Serializable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
@@ -49,7 +50,7 @@ import org.vitrivr.cottontail.grpc.CottontailGrpc.UpdateMessage;
  * A wrapper class that provides all functionality exposed by the Cottontail DB gRPC endpoint.
  */
 @Slf4j
-public class CottontailWrapper implements AutoCloseable {
+public class CottontailWrapper implements AutoCloseable, Serializable {
 
     private static final long MAX_QUERY_CALL_TIMEOUT = 300_000; // TODO expose to config
 
@@ -71,7 +72,7 @@ public class CottontailWrapper implements AutoCloseable {
     /**
      * Reference to the {@link CottontailStore} this {@link CottontailWrapper} belongs to.
      */
-    private final CottontailStore store;
+    private final transient CottontailStore store;
 
 
     /**

@@ -40,10 +40,10 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
+import org.codehaus.commons.compiler.util.resource.MapResourceFinder;
+import org.codehaus.commons.compiler.util.resource.ResourceFinder;
 import org.codehaus.janino.JavaSourceClassLoader;
 import org.codehaus.janino.util.ClassFile;
-import org.codehaus.janino.util.resource.MapResourceFinder;
-import org.codehaus.janino.util.resource.ResourceFinder;
 import org.polypheny.db.config.RuntimeConfig;
 
 
@@ -162,6 +162,7 @@ public class JaninoCompiler implements JavaCompiler {
         public void setFullClassName( String fullClassName ) {
             this.fullClassName = fullClassName;
         }
+
     }
 
 
@@ -213,6 +214,8 @@ public class JaninoCompiler implements JavaCompiler {
             }
             return map;
         }
+
     }
+
 }
 

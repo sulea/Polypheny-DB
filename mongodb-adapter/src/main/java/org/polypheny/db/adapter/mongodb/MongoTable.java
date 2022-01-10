@@ -107,11 +107,11 @@ public class MongoTable extends AbstractQueryableTable implements TranslatableTa
     @Getter
     private final MongoSchema mongoSchema;
     @Getter
-    private final MongoCollection<Document> collection;
+    private final transient MongoCollection<Document> collection;
     @Getter
     private final CatalogTable catalogTable;
     @Getter
-    private final TransactionProvider transactionProvider;
+    private final transient TransactionProvider transactionProvider;
     @Getter
     private final int storeId;
 

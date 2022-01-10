@@ -24,6 +24,7 @@ import java.sql.Statement;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.nustaq.serialization.FSTConfiguration;
 import org.polypheny.db.TestHelper;
 import org.polypheny.db.TestHelper.JdbcConnection;
 import org.polypheny.db.algebra.AlgNode;
@@ -60,6 +61,7 @@ public class AlgNodeTypeFactoryTest {
 
     private Transaction transaction;
     private AlgBuilder builder;
+    static FSTConfiguration conf;
 
 
     @BeforeClass
@@ -72,6 +74,7 @@ public class AlgNodeTypeFactoryTest {
                 connection.commit();
             }
         }
+        conf = FSTConfiguration.createDefaultConfiguration();
     }
 
 
@@ -80,6 +83,16 @@ public class AlgNodeTypeFactoryTest {
         this.transaction = helper.getTransaction();
         this.builder = AlgBuilder.create( transaction.createStatement() );
         AlgNodeTypeFactory.cluster = AlgOptCluster.create( new VolcanoPlanner(), rexBuilder );
+    }
+
+
+    @Test
+    public void algOptTableFSTTest() {
+        AlgNode scan = builder.scan( "public", "tableA" ).build();
+
+        byte[] barray = conf.asByteArray( scan.getTable() );
+        AlgOptTable table = (AlgOptTable) conf.asObject( barray );
+        assert table.getRelOptSchema().equals( scan.getTable() );
     }
 
 
@@ -95,6 +108,16 @@ public class AlgNodeTypeFactoryTest {
 
     @Test
     public void tableScanTest() {
+        AlgNode scan = builder.scan( "public", "tableA" ).build();
+
+        byte[] barray = conf.asByteArray( scan );
+        AlgNode table = (AlgNode) conf.asObject( barray );
+        assert table instanceof TableScan;
+    }
+
+
+    @Test
+    public void tableScanFSTTest() {
         AlgNode scan = builder.scan( "public", "tableA" ).build();
 
         String serialized = gson.toJson( scan );

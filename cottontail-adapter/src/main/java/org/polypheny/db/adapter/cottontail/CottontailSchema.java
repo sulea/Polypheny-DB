@@ -41,7 +41,7 @@ public class CottontailSchema extends AbstractSchema {
     private final Map<String, CottontailTable> tableMap;
     private final Map<String, String> physicalToLogicalTableNameMap;
 
-    private final CottontailStore cottontailStore;
+    private final transient CottontailStore cottontailStore;
 
     private final String name;
 
@@ -49,7 +49,7 @@ public class CottontailSchema extends AbstractSchema {
     private final CottontailGrpc.SchemaName cottontailSchema;
 
     @Getter
-    private final CottontailWrapper wrapper;
+    private final transient CottontailWrapper wrapper;
 
 
     private CottontailSchema(

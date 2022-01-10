@@ -34,6 +34,7 @@
 package org.polypheny.db.type;
 
 
+import java.io.Serializable;
 import java.util.List;
 import java.util.Objects;
 import org.polypheny.db.algebra.type.AlgDataType;
@@ -46,7 +47,7 @@ import org.polypheny.db.algebra.type.AlgDataTypePrecedenceList;
 /**
  * Abstract base class for SQL implementations of {@link AlgDataType}.
  */
-public abstract class AbstractPolyType extends AlgDataTypeImpl implements Cloneable {
+public abstract class AbstractPolyType extends AlgDataTypeImpl implements Cloneable, Serializable {
 
     protected final PolyType typeName;
     protected boolean isNullable;
