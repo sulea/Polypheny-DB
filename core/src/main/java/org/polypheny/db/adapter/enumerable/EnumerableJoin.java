@@ -34,6 +34,7 @@
 package org.polypheny.db.adapter.enumerable;
 
 
+import com.google.common.collect.ImmutableList;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -174,19 +175,31 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
 
     @Override
     public Result implement( EnumerableAlgImplementor implementor, Prefer pref ) {
+        if ( getOriginalNode() != null ) {
+            return getPreparedResult( implementor, pref );
+        } else {
+            return getDefaultResult( implementor, pref );
+        }
+    }
+
+
+    private Result getPreparedResult( EnumerableAlgImplementor implementor, Prefer pref ) {
         BlockBuilder builder = new BlockBuilder();
-        final Result leftResult = implementor.visitChild( this, 0, (EnumerableAlg) left, pref );
+        boolean preRouteRight = this.getJoinType() != JoinAlgType.LEFT
+                || (this.getJoinType() == JoinAlgType.INNER && left.getTable().getRowCount() < right.getTable().getRowCount());
 
-        Expression exp = builder.append( "values_" + System.nanoTime(), leftResult.block );
+        final Result enumerable = implementor.visitChild( this, preRouteRight ? 1 : 0, (EnumerableAlg) (preRouteRight ? right : left), pref );
 
-        byte[] nodeArray = Serializer.conf.asByteArray( node );
+        Expression exp = builder.append( "enumerable_" + System.nanoTime(), enumerable.block );
+
+        byte[] nodeArray = Serializer.conf.asByteArray( getOriginalNode() );
         byte[] compressed = Serializer.compress( nodeArray );
 
         String name = builder.newName( "join_" + System.nanoTime() );
         ParameterExpression nameExpr = Expressions.parameter( byte[].class, name );
         implementor.getNodes().put( nameExpr, compressed );
 
-        Expression result = Expressions.call( BuiltInMethod.ROUTE_JOIN_FILTER.method, Expressions.constant( DataContext.ROOT ), exp, nameExpr, Expressions.constant( PRE_ROUTE.LEFT ) );
+        Expression result = Expressions.call( BuiltInMethod.ROUTE_JOIN_FILTER.method, Expressions.constant( DataContext.ROOT ), exp, nameExpr, Expressions.constant( Serializer.conf.asByteArray( rowType ) ), Expressions.constant( preRouteRight ? PRE_ROUTE.RIGHT : PRE_ROUTE.LEFT ) );
         builder.add( Expressions.return_( null, builder.append( "collector_" + System.nanoTime(), result ) ) );
 
         final PhysType physType =
@@ -281,8 +294,8 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
 
     }
 
-    /*@Override
-    public Result implement( EnumerableAlgImplementor implementor, Prefer pref ) {
+
+    public Result getDefaultResult( EnumerableAlgImplementor implementor, Prefer pref ) {
         BlockBuilder builder = new BlockBuilder();
         final Result leftResult = implementor.visitChild( this, 0, (EnumerableAlg) left, pref );
         Expression leftExpression = builder.append( "left" + System.nanoTime(), leftResult.block );
@@ -305,7 +318,7 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
                                                 .append( Expressions.constant( joinType.generatesNullsOnLeft() ) )
                                                 .append( Expressions.constant( joinType.generatesNullsOnRight() ) ) ) )
                         .toBlock() );
-    }*/
+    }
 
 }
 

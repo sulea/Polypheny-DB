@@ -34,6 +34,7 @@
 package org.polypheny.db.algebra.type;
 
 
+import java.io.Serializable;
 import org.polypheny.db.type.PolyType;
 
 
@@ -44,7 +45,7 @@ import org.polypheny.db.type.PolyType;
  *
  * The default implementation is {@link #DEFAULT}.
  */
-public interface AlgDataTypeSystem {
+public interface AlgDataTypeSystem extends Serializable {
 
     /**
      * Default type system.

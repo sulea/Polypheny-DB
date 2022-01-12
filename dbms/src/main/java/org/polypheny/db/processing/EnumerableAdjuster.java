@@ -101,7 +101,7 @@ public class EnumerableAdjuster {
     }
 
 
-    public static AlgRoot prerouteJoins( AlgRoot root, Statement statement, QueryProcessor queryProcessor ) {
+    public static AlgRoot prepareJoins( AlgRoot root, Statement statement, QueryProcessor queryProcessor ) {
         JoinAdjuster adjuster = new JoinAdjuster( statement, queryProcessor );
         return AlgRoot.of( root.alg.accept( adjuster ), root.kind );
     }
@@ -165,6 +165,7 @@ public class EnumerableAdjuster {
 
         private final Statement statement;
         private final QueryProcessor queryProcessor;
+        private final boolean fullPreExecute = false;
 
 
         public JoinAdjuster( Statement statement, QueryProcessor queryProcessor ) {
@@ -182,8 +183,7 @@ public class EnumerableAdjuster {
             AlgNode right = join.getRight().accept( this );
 
             if ( join.getCondition() instanceof RexCall ) {
-                List<RexNode> operands = ((RexCall) join.getCondition()).operands;
-                return preRouteOneSide( join, builder, rexBuilder, left, right, operands );
+                return prepareOneSide( join, builder, rexBuilder, left, right );
             }
             join.replaceInput( 0, left );
             join.replaceInput( 1, right );
@@ -192,7 +192,7 @@ public class EnumerableAdjuster {
         }
 
 
-        private AlgNode preRouteOneSide( LogicalJoin join, AlgBuilder builder, RexBuilder rexBuilder, AlgNode left, AlgNode right, List<RexNode> operands ) {
+        private AlgNode prepareOneSide( LogicalJoin join, AlgBuilder builder, RexBuilder rexBuilder, AlgNode left, AlgNode right ) {
             boolean preRouteRight = join.getJoinType() != JoinAlgType.LEFT
                     || (join.getJoinType() == JoinAlgType.INNER && left.getTable().getRowCount() < right.getTable().getRowCount());
 
@@ -208,43 +208,52 @@ public class EnumerableAdjuster {
 
             builder.project( extractor.getProjects() );
 
-            PolyResult result = queryProcessor.prepareQuery( AlgRoot.of( builder.build(), Kind.SELECT ), false );
-            List<List<Object>> rows = result.getRows( statement, -1 );
+            if ( fullPreExecute ) {
 
-            builder.push( preRouteRight ? left : right );
+                PolyResult result = queryProcessor.prepareQuery( AlgRoot.of( builder.build(), Kind.SELECT ), false );
+                List<List<Object>> rows = result.getRows( statement, -1 );
 
-            List<RexNode> nodes = new ArrayList<>();
+                builder.push( preRouteRight ? left : right );
 
-            for ( List<Object> row : rows ) {
-                List<RexNode> ands = new ArrayList<>();
-                int pos = 0;
-                for ( Object o : row ) {
-                    RexInputRef ref = extractor.otherProjects.get( pos );
-                    ands.add(
-                            rexBuilder.makeCall(
-                                    OperatorRegistry.get( OperatorName.EQUALS ),
-                                    builder.field( ref.getIndex() ),
-                                    rexBuilder.makeLiteral( o, ref.getType(), false ) ) );
-                    pos++;
+                List<RexNode> nodes = new ArrayList<>();
+
+                for ( List<Object> row : rows ) {
+                    List<RexNode> ands = new ArrayList<>();
+                    int pos = 0;
+                    for ( Object o : row ) {
+                        RexInputRef ref = extractor.otherProjects.get( pos );
+                        ands.add(
+                                rexBuilder.makeCall(
+                                        OperatorRegistry.get( OperatorName.EQUALS ),
+                                        builder.field( ref.getIndex() ),
+                                        rexBuilder.makeLiteral( o, ref.getType(), false ) ) );
+                        pos++;
+                    }
+                    if ( ands.size() > 1 ) {
+                        nodes.add( rexBuilder.makeCall( OperatorRegistry.get( OperatorName.AND ), ands ) );
+                    } else {
+                        nodes.add( ands.get( 0 ) );
+                    }
                 }
-                if ( ands.size() > 1 ) {
-                    nodes.add( rexBuilder.makeCall( OperatorRegistry.get( OperatorName.AND ), ands ) );
+                AlgNode prepared;
+                if ( nodes.size() > 1 ) {
+                    prepared = builder.filter( rexBuilder.makeCall( OperatorRegistry.get( OperatorName.OR ), nodes ) ).build();
+                } else if ( nodes.size() == 1 ) {
+                    prepared = builder.filter( nodes.get( 0 ) ).build();
                 } else {
-                    nodes.add( ands.get( 0 ) );
+                    // there seems to be nothing in the pre-routed side, maybe we use an empty values?
+                    prepared = preRouteRight ? left : right;
                 }
-            }
-            AlgNode prepared;
-            if ( nodes.size() > 1 ) {
-                prepared = builder.filter( rexBuilder.makeCall( OperatorRegistry.get( OperatorName.OR ), nodes ) ).build();
-            } else if ( nodes.size() == 1 ) {
-                prepared = builder.filter( nodes.get( 0 ) ).build();
+                builder.push( preRouteRight ? prepared : left );
+                builder.push( preRouteRight ? right : prepared );
+                builder.join( join.getJoinType(), join.getCondition() );
             } else {
-                // there seems to be nothing in the pre-routed side, maybe we use an empty values?
-                prepared = preRouteRight ? left : right;
+                // cannot project unused values away as then AlgNode would possibly be invalid
+                AlgNode prepared = builder.build();
+                builder.push( preRouteRight ? left : prepared );
+                builder.push( preRouteRight ? prepared : right );
+                builder.join( join.getJoinType(), join.getCondition() );
             }
-            builder.push( preRouteRight ? prepared : left );
-            builder.push( preRouteRight ? right : prepared );
-            builder.join( join.getJoinType(), join.getCondition() );
             return builder.build();
         }
 
@@ -299,6 +308,7 @@ public class EnumerableAdjuster {
                     otherProjects.add( otherProject );
                 }
 
+                // we only need to filter for the join condition later on, so this is enough
                 return project;
             }
 
@@ -308,20 +318,21 @@ public class EnumerableAdjuster {
                 List<RexNode> nodes = call.operands.stream().map( c -> c.accept( this ) ).filter( Objects::nonNull ).collect( Collectors.toList() );
 
                 if ( nodes.size() == 1 ) {
-                    return nodes.get( 0 );
+                    filters.add( nodes.get( 0 ) );
+                    //return nodes.get( 0 );
                 } else if ( nodes.size() == 0 ) {
                     return null;
                 }
 
-                switch ( call.op.getOperatorName() ) {
+                /*switch ( call.op.getOperatorName() ) {
                     case EQUALS:
                     case NOT_EQUALS:
                         filters.add( rexBuilder.makeCall( call.op, nodes ) );
+                        break;
                     case AND:
                     case OR:
-                    default:
-                        return call;
-                }
+                }*/
+                return call;
             }
 
         }

@@ -59,6 +59,7 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 import javax.annotation.Nonnull;
+import lombok.Getter;
 import org.apache.calcite.linq4j.Ord;
 import org.apache.calcite.linq4j.function.Experimental;
 import org.bson.BsonValue;
@@ -145,6 +146,7 @@ import org.polypheny.db.util.mapping.Mappings;
  */
 public class AlgBuilder {
 
+    @Getter
     protected final AlgOptCluster cluster;
     protected final AlgOptSchema algOptSchema;
     private final AlgFactories.FilterFactory filterFactory;

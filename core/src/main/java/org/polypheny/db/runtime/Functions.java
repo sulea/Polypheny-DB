@@ -72,6 +72,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
@@ -79,6 +80,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
+import java.util.Stack;
 import java.util.TimeZone;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Matcher;
@@ -104,21 +106,40 @@ import org.polypheny.db.PolyResult;
 import org.polypheny.db.adapter.DataContext;
 import org.polypheny.db.adapter.enumerable.EnumerableJoin.PRE_ROUTE;
 import org.polypheny.db.adapter.enumerable.JavaRowFormat;
+import org.polypheny.db.algebra.AbstractAlgNode;
 import org.polypheny.db.algebra.AlgNode;
 import org.polypheny.db.algebra.AlgRoot;
+import org.polypheny.db.algebra.AlgShuttleImpl;
 import org.polypheny.db.algebra.constant.Kind;
+import org.polypheny.db.algebra.core.TableFunctionScan;
+import org.polypheny.db.algebra.core.TableScan;
 import org.polypheny.db.algebra.exceptions.ConstraintViolationException;
 import org.polypheny.db.algebra.json.JsonConstructorNullClause;
 import org.polypheny.db.algebra.json.JsonExistsErrorBehavior;
 import org.polypheny.db.algebra.json.JsonQueryEmptyOrErrorBehavior;
 import org.polypheny.db.algebra.json.JsonQueryWrapperBehavior;
 import org.polypheny.db.algebra.json.JsonValueEmptyOrErrorBehavior;
+import org.polypheny.db.algebra.logical.LogicalAggregate;
+import org.polypheny.db.algebra.logical.LogicalConditionalExecute;
+import org.polypheny.db.algebra.logical.LogicalConditionalTableModify;
+import org.polypheny.db.algebra.logical.LogicalConstraintEnforcer;
+import org.polypheny.db.algebra.logical.LogicalCorrelate;
+import org.polypheny.db.algebra.logical.LogicalExchange;
+import org.polypheny.db.algebra.logical.LogicalFilter;
+import org.polypheny.db.algebra.logical.LogicalIntersect;
 import org.polypheny.db.algebra.logical.LogicalJoin;
+import org.polypheny.db.algebra.logical.LogicalMatch;
+import org.polypheny.db.algebra.logical.LogicalMinus;
+import org.polypheny.db.algebra.logical.LogicalProject;
+import org.polypheny.db.algebra.logical.LogicalSort;
+import org.polypheny.db.algebra.logical.LogicalUnion;
+import org.polypheny.db.algebra.logical.LogicalValues;
 import org.polypheny.db.algebra.operators.OperatorName;
 import org.polypheny.db.algebra.type.AlgDataType;
 import org.polypheny.db.algebra.type.AlgDataTypeSystem;
 import org.polypheny.db.interpreter.Row;
 import org.polypheny.db.languages.OperatorRegistry;
+import org.polypheny.db.plan.AlgOptCluster;
 import org.polypheny.db.rex.RexBuilder;
 import org.polypheny.db.rex.RexCall;
 import org.polypheny.db.rex.RexInputRef;
@@ -330,29 +351,53 @@ public class Functions {
 
 
     @SuppressWarnings("unused")
-    public static Enumerable<?> routeJoinFilter( final DataContext context, final Enumerable<Object[]> baz, byte[] other, PRE_ROUTE preRoute ) {
+    public static Enumerable<?> routeJoinFilter( final DataContext context, final Enumerable<Object[]> baz, byte[] other, byte[] serRowType, PRE_ROUTE preRoute ) {
         byte[] uncompressed = Serializer.decompress( other );
-        LogicalJoin node = (LogicalJoin) Serializer.conf.asObject( uncompressed );
+        AlgNode node = (AlgNode) Serializer.conf.asObject( uncompressed );
+        AlgDataType rowType = (AlgDataType) Serializer.conf.asObject( serRowType );
+        LogicalJoin join;
+        if ( node instanceof LogicalJoin ) {
+            join = (LogicalJoin) node;
+        } else if ( node.getInput( 0 ) instanceof LogicalJoin ) {
+            join = (LogicalJoin) node.getInput( 0 );
+        } else {
+            throw new RuntimeException( "No join found." );
+        }
+
         List<Object[]> filters = new ArrayList<>();
         for ( Object[] objects : baz ) {
             filters.add( objects );
         }
         AlgBuilder builder = AlgBuilder.create( context.getStatement() );
         RexBuilder rexBuilder = builder.getRexBuilder();
+
+        node.accept( new ClusterSetter( builder.getCluster() ) );
+
         boolean preRouteRight = preRoute == PRE_ROUTE.RIGHT;
 
-        ConditionExtractor extractor = new ConditionExtractor( preRouteRight, rexBuilder, node.getLeft().getRowType().getFieldCount() );
+        ConditionExtractor extractor = new ConditionExtractor( preRouteRight, rexBuilder, join.getLeft().getRowType().getFieldCount() );
 
-        node.accept( extractor );
+        join.accept( extractor );
 
-        builder.push( preRouteRight ? node.getLeft() : node.getRight() );
+        builder.push( preRouteRight ? join.getLeft() : join.getRight() );
 
         List<RexNode> nodes = new ArrayList<>();
 
         for ( Object[] row : filters ) {
             List<RexNode> ands = new ArrayList<>();
             int pos = 0;
+            int offset = 0;
             for ( Object o : row ) {
+                if ( extractor.projects.size() <= pos ) {
+                    // consume all needed value could also break complete for
+                    continue;
+                }
+                RexInputRef actual = extractor.projects.get( pos );
+                if ( actual.getIndex() == (pos + offset) ) {
+                    // we get too many results and have to ignore the unnecessary ones
+                    offset++;
+                    continue;
+                }
                 RexInputRef ref = extractor.otherProjects.get( pos );
                 ands.add(
                         rexBuilder.makeCall(
@@ -374,15 +419,186 @@ public class Functions {
             prepared = builder.filter( nodes.get( 0 ) ).build();
         } else {
             // there seems to be nothing in the pre-routed side, maybe we use an empty values?
-            prepared = preRouteRight ? node.getLeft() : node.getRight();
+            prepared = preRouteRight ? join.getLeft() : join.getRight();
         }
-        builder.push( preRouteRight ? prepared : node.getLeft() );
-        builder.push( preRouteRight ? node.getRight() : prepared );
-        builder.join( node.getJoinType(), node.getCondition() );
+        builder.push( preRouteRight ? prepared : join.getLeft() );
+        builder.push( preRouteRight ? join.getRight() : prepared );
+        builder.join( join.getJoinType(), join.getCondition() );
 
-        PolyResult result = context.getStatement().getQueryProcessor().prepareQuery( AlgRoot.of( builder.build(), Kind.SELECT ), false );
+        // we cannot be sure the order is correct, so we have to fix that by adjusting it
+        AlgNode build = builder.build();
+        List<String> names = rowType.getFieldNames();
+        Set<String> newNames = new LinkedHashSet<>();
+        for ( String name : names ) {
+            String newName = name;
+            for ( int i = 0; !newNames.add( newName ); i++ ) {
+                newName = name + i;
+            }
+        }
+        builder.push( build );
+        builder.rename( new ArrayList<>( newNames ) );
+
+        // even when reordered it gets put back incorrectly..
+        builder.project( names.stream().map( builder::field ).collect( Collectors.toList() ) );
+        build = builder.build();
+
+        PolyResult result = context
+                .getStatement()
+                .getQueryProcessor()
+                .prepareQuery(
+                        AlgRoot.of( build, Kind.SELECT ),
+                        rexBuilder.getTypeFactory().builder().build(),
+                        false,
+                        true,
+                        false );
+
+        List<List<Object>> res = result.getRows( context.getStatement(), -1 );
 
         return result.enumerable( context );
+    }
+
+
+    public static class ClusterSetter extends AlgShuttleImpl {
+
+        private final AlgOptCluster cluster;
+
+
+        public ClusterSetter( AlgOptCluster cluster ) {
+            this.cluster = cluster;
+        }
+
+
+        @Override
+        public AlgNode visit( LogicalAggregate aggregate ) {
+            setCluster( aggregate, cluster );
+            return super.visit( aggregate );
+        }
+
+
+        @Override
+        public AlgNode visit( LogicalMatch match ) {
+            setCluster( match, cluster );
+            return super.visit( match );
+        }
+
+
+        @Override
+        public AlgNode visit( TableScan scan ) {
+            setCluster( scan, cluster );
+            return super.visit( scan );
+        }
+
+
+        @Override
+        public AlgNode visit( TableFunctionScan scan ) {
+            setCluster( scan, cluster );
+            return super.visit( scan );
+        }
+
+
+        @Override
+        public AlgNode visit( LogicalValues values ) {
+            setCluster( values, cluster );
+            return super.visit( values );
+        }
+
+
+        @Override
+        public AlgNode visit( LogicalFilter filter ) {
+            setCluster( filter, cluster );
+            return super.visit( filter );
+        }
+
+
+        @Override
+        public AlgNode visit( LogicalProject project ) {
+            setCluster( project, cluster );
+            return super.visit( project );
+        }
+
+
+        @Override
+        public AlgNode visit( LogicalJoin join ) {
+            setCluster( join, cluster );
+            return super.visit( join );
+        }
+
+
+        @Override
+        public AlgNode visit( LogicalCorrelate correlate ) {
+            setCluster( correlate, cluster );
+            return super.visit( correlate );
+        }
+
+
+        @Override
+        public AlgNode visit( LogicalUnion union ) {
+            setCluster( union, cluster );
+            return super.visit( union );
+        }
+
+
+        @Override
+        public AlgNode visit( LogicalIntersect intersect ) {
+            setCluster( intersect, cluster );
+            return super.visit( intersect );
+        }
+
+
+        @Override
+        public AlgNode visit( LogicalMinus minus ) {
+            setCluster( minus, cluster );
+            return super.visit( minus );
+        }
+
+
+        @Override
+        public AlgNode visit( LogicalSort sort ) {
+            setCluster( sort, cluster );
+            return super.visit( sort );
+        }
+
+
+        @Override
+        public AlgNode visit( LogicalExchange exchange ) {
+            setCluster( exchange, cluster );
+            return super.visit( exchange );
+        }
+
+
+        @Override
+        public AlgNode visit( LogicalConditionalExecute lce ) {
+            setCluster( lce, cluster );
+            return super.visit( lce );
+        }
+
+
+        @Override
+        public AlgNode visit( LogicalConditionalTableModify conditionalModify ) {
+            setCluster( conditionalModify, cluster );
+            return super.visit( conditionalModify );
+        }
+
+
+        @Override
+        public AlgNode visit( LogicalConstraintEnforcer enforcer ) {
+            setCluster( enforcer, cluster );
+            return super.visit( enforcer );
+        }
+
+
+        @Override
+        public AlgNode visit( AlgNode other ) {
+            setCluster( (AbstractAlgNode) other, cluster );
+            return super.visit( other );
+        }
+
+
+        private void setCluster( AbstractAlgNode other, AlgOptCluster cluster ) {
+            other.setTraitSet( cluster.traitSet() );
+            other.setCluster( cluster );
+        }
+
     }
 
 
@@ -398,6 +614,8 @@ public class Functions {
         private final List<RexInputRef> projects = new ArrayList<>();
         @Getter
         private final List<RexInputRef> otherProjects = new ArrayList<>();
+
+        private final Stack<RexNode> stack = new Stack<>();
 
 
         public ConditionExtractor( boolean preRouteRight, RexBuilder rexBuilder, long leftSize ) {
@@ -431,34 +649,32 @@ public class Functions {
 
             if ( project != null ) {
                 projects.add( project );
+                stack.add( project );
             }
             if ( otherProject != null ) {
                 otherProjects.add( otherProject );
             }
-
-            return project;
+            return inputRef;
         }
 
 
         @Override
         public RexNode visitCall( RexCall call ) {
-            List<RexNode> nodes = call.operands.stream().map( c -> c.accept( this ) ).filter( Objects::nonNull ).collect( Collectors.toList() );
+            call.operands.forEach( c -> c.accept( this ) );
 
-            if ( nodes.size() == 1 ) {
-                return nodes.get( 0 );
-            } else if ( nodes.size() == 0 ) {
-                return null;
+            if ( stack.size() == 1 || stack.isEmpty() ) {
+                return call;
             }
 
             switch ( call.op.getOperatorName() ) {
                 case EQUALS:
                 case NOT_EQUALS:
-                    filters.add( rexBuilder.makeCall( call.op, nodes ) );
+                    filters.add( rexBuilder.makeCall( call.op, stack ) );
+                    break;
                 case AND:
                 case OR:
-                default:
-                    return call;
             }
+            return call;
         }
 
     }
