@@ -351,7 +351,7 @@ public class Functions {
 
 
     @SuppressWarnings("unused")
-    public static Enumerable<?> routeJoinFilter( final DataContext context, final Enumerable<Object[]> baz, byte[] other, byte[] serRowType, PRE_ROUTE preRoute ) {
+    public static Enumerable<?> routeJoinFilter( final DataContext context, final Enumerable<Object[]> baz, byte[] other, byte[] serRowType, boolean invertRowType, PRE_ROUTE preRoute ) {
         byte[] uncompressed = Serializer.decompress( other );
         AlgNode node = (AlgNode) Serializer.conf.asObject( uncompressed );
         AlgDataType rowType = (AlgDataType) Serializer.conf.asObject( serRowType );
@@ -389,7 +389,7 @@ public class Functions {
             int offset = 0;
             for ( Object o : row ) {
                 if ( extractor.projects.size() <= pos ) {
-                    // consume all needed value could also break complete for
+                    // consumed all needed value could also break complete for
                     continue;
                 }
                 RexInputRef actual = extractor.projects.get( pos );
@@ -421,6 +421,7 @@ public class Functions {
             // there seems to be nothing in the pre-routed side, maybe we use an empty values?
             prepared = preRouteRight ? join.getLeft() : join.getRight();
         }
+        //AlgNode values = builder.values().build();
         builder.push( preRouteRight ? prepared : join.getLeft() );
         builder.push( preRouteRight ? join.getRight() : prepared );
         builder.join( join.getJoinType(), join.getCondition() );
@@ -606,19 +607,19 @@ public class Functions {
 
         private final boolean preRouteRight;
         private final RexBuilder rexBuilder;
-        private final long leftSize;
+        private final int leftSize;
 
         @Getter
         private final List<RexNode> filters = new ArrayList<>();
         @Getter
-        private final List<RexInputRef> projects = new ArrayList<>();
+        private List<RexInputRef> projects = new ArrayList<>();
         @Getter
-        private final List<RexInputRef> otherProjects = new ArrayList<>();
+        private List<RexInputRef> otherProjects = new ArrayList<>();
 
         private final Stack<RexNode> stack = new Stack<>();
 
 
-        public ConditionExtractor( boolean preRouteRight, RexBuilder rexBuilder, long leftSize ) {
+        public ConditionExtractor( boolean preRouteRight, RexBuilder rexBuilder, int leftSize ) {
             this.preRouteRight = preRouteRight;
             this.rexBuilder = rexBuilder;
             this.leftSize = leftSize;
@@ -633,10 +634,10 @@ public class Functions {
             if ( inputRef.getIndex() >= leftSize ) {
                 // is from right
                 if ( preRouteRight ) {
-                    project = rexBuilder.makeInputRef( inputRef.getType(), (int) (inputRef.getIndex() - leftSize) );
+                    project = rexBuilder.makeInputRef( inputRef.getType(), inputRef.getIndex() - leftSize );
                 } else {
                     // add not routed ref into other projection collection to use it after
-                    otherProject = rexBuilder.makeInputRef( inputRef.getType(), (int) (inputRef.getIndex() - leftSize) );
+                    otherProject = rexBuilder.makeInputRef( inputRef.getType(), inputRef.getIndex() - leftSize );
                 }
             } else {
                 // is from left

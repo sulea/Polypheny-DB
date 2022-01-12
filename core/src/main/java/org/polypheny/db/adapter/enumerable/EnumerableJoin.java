@@ -57,6 +57,7 @@ import org.polypheny.db.algebra.core.EquiJoin;
 import org.polypheny.db.algebra.core.Join;
 import org.polypheny.db.algebra.core.JoinAlgType;
 import org.polypheny.db.algebra.core.JoinInfo;
+import org.polypheny.db.algebra.logical.LogicalJoin;
 import org.polypheny.db.algebra.metadata.AlgMdCollation;
 import org.polypheny.db.algebra.metadata.AlgMetadataQuery;
 import org.polypheny.db.plan.AlgOptCluster;
@@ -68,6 +69,7 @@ import org.polypheny.db.rex.RexCall;
 import org.polypheny.db.rex.RexInputRef;
 import org.polypheny.db.rex.RexNode;
 import org.polypheny.db.rex.RexShuttle;
+import org.polypheny.db.rex.RexVisitorImpl;
 import org.polypheny.db.serialize.Serializer;
 import org.polypheny.db.util.BuiltInMethod;
 import org.polypheny.db.util.ImmutableIntList;
@@ -190,7 +192,31 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
 
         final Result enumerable = implementor.visitChild( this, preRouteRight ? 1 : 0, (EnumerableAlg) (preRouteRight ? right : left), pref );
 
+        boolean invertRowType = false;
+
         Expression exp = builder.append( "enumerable_" + System.nanoTime(), enumerable.block );
+
+        if ( joinType == JoinAlgType.INNER ) {
+            LogicalJoin join;
+            AlgNode node = getOriginalNode();
+            if ( node instanceof LogicalJoin ) {
+                join = (LogicalJoin) node;
+            } else if ( node.getInput( 0 ) instanceof LogicalJoin ) {
+                join = (LogicalJoin) node.getInput( 0 );
+            } else {
+                throw new RuntimeException( "No join found." );
+            }
+            if ( !join.getRowType().getFieldNames().equals( rowType.getFieldNames() ) ) {
+                // the left and right side was flipped so we adjust it back
+                AlgNode left = join.getLeft();
+                AlgNode right = join.getRight();
+                preRouteRight = !preRouteRight;
+                invertRowType = true;
+                join = LogicalJoin.create( right, left, condition, join.getVariablesSet(), joinType );
+            }
+
+            setOriginalNode( join );
+        }
 
         byte[] nodeArray = Serializer.conf.asByteArray( getOriginalNode() );
         byte[] compressed = Serializer.compress( nodeArray );
@@ -199,7 +225,14 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
         ParameterExpression nameExpr = Expressions.parameter( byte[].class, name );
         implementor.getNodes().put( nameExpr, compressed );
 
-        Expression result = Expressions.call( BuiltInMethod.ROUTE_JOIN_FILTER.method, Expressions.constant( DataContext.ROOT ), exp, nameExpr, Expressions.constant( Serializer.conf.asByteArray( rowType ) ), Expressions.constant( preRouteRight ? PRE_ROUTE.RIGHT : PRE_ROUTE.LEFT ) );
+        Expression result = Expressions.call(
+                BuiltInMethod.ROUTE_JOIN_FILTER.method,
+                Expressions.constant( DataContext.ROOT ),
+                exp,
+                nameExpr,
+                Expressions.constant( Serializer.conf.asByteArray( rowType ) ),
+                Expressions.constant( invertRowType ),
+                Expressions.constant( preRouteRight ? PRE_ROUTE.RIGHT : PRE_ROUTE.LEFT ) );
         builder.add( Expressions.return_( null, builder.append( "collector_" + System.nanoTime(), result ) ) );
 
         final PhysType physType =
@@ -318,6 +351,27 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
                                                 .append( Expressions.constant( joinType.generatesNullsOnLeft() ) )
                                                 .append( Expressions.constant( joinType.generatesNullsOnRight() ) ) ) )
                         .toBlock() );
+    }
+
+
+    private static class ConditionInverter extends RexVisitorImpl {
+
+        private final int leftSize;
+        private final RexBuilder builder;
+
+
+        protected ConditionInverter( int leftSize, RexBuilder builder ) {
+            super( true );
+            this.leftSize = leftSize;
+            this.builder = builder;
+        }
+
+
+        @Override
+        public Object visitInputRef( RexInputRef inputRef ) {
+            return super.visitInputRef( inputRef );
+        }
+
     }
 
 }
