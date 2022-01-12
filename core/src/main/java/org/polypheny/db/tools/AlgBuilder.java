@@ -2142,6 +2142,23 @@ public class AlgBuilder {
 
 
     /**
+     * Create a {@link Values} with multiple rows and the specified row type.
+     *
+     * @param rowType the RowType of the columns
+     * @param rowColumnValues the collection of values
+     */
+    public AlgBuilder values( AlgDataType rowType, List<Object[]> rowColumnValues ) {
+        final ImmutableList.Builder<ImmutableList<RexLiteral>> builder = ImmutableList.builder();
+        for ( Object[] columnValues : rowColumnValues ) {
+            builder.add( tupleList( rowType.getFieldCount(), columnValues ).get( 0 ) );
+        }
+        AlgNode values = valuesFactory.createValues( cluster, rowType, builder.build() );
+        push( values );
+        return this;
+    }
+
+
+    /**
      * Creates a {@link Values} with a specified row type.
      *
      * This method can handle cases that {@link #values(String[], Object...)} cannot, such as all values of a column being

@@ -354,10 +354,11 @@ public class Functions {
         byte[] uncompressed = Serializer.decompress( other );
         LogicalJoin join = (LogicalJoin) Serializer.conf.asObject( uncompressed );
         boolean executedRight = preRoute == PRE_ROUTE.RIGHT;
+        boolean transformToValues = false;
 
-        List<Object[]> filters = new ArrayList<>();
+        List<Object[]> receivedValues = new ArrayList<>();
         for ( Object[] objects : baz ) {
-            filters.add( objects );
+            receivedValues.add( objects );
         }
         AlgBuilder builder = AlgBuilder.create( context.getStatement() );
         RexBuilder rexBuilder = builder.getRexBuilder();
@@ -371,7 +372,7 @@ public class Functions {
         builder.push( executedRight ? join.getLeft() : join.getRight() );
 
         List<RexNode> nodes = new ArrayList<>();
-        for ( Object[] row : filters ) {
+        for ( Object[] row : receivedValues ) {
             List<RexNode> ands = new ArrayList<>();
             int pos = 0;
             int offset = 0;
@@ -409,10 +410,18 @@ public class Functions {
             // there seems to be nothing in the pre-routed side, maybe we use an empty values?
             prepared = executedRight ? join.getLeft() : join.getRight();
         }
-        //AlgNode values = builder.values().build();
-        builder.push( executedRight ? prepared : join.getLeft() );
-        builder.push( executedRight ? join.getRight() : prepared );
-        builder.join( join.getJoinType(), join.getCondition() );
+        if ( !transformToValues ) {
+            builder.push( executedRight ? prepared : join.getLeft() );
+            builder.push( executedRight ? join.getRight() : prepared );
+            builder.join( join.getJoinType(), join.getCondition() );
+        } else {
+            builder.values( executedRight ? join.getRight().getRowType() : join.getLeft().getRowType(), receivedValues );
+
+            AlgNode values = builder.build();
+            builder.push( executedRight ? prepared : values );
+            builder.push( executedRight ? values : prepared );
+            builder.join( join.getJoinType(), join.getCondition() );
+        }
 
         AlgNode build = builder.build();
 
