@@ -19,8 +19,6 @@ package org.polypheny.db.webui;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonSerializer;
 import com.google.gson.TypeAdapter;
 import com.google.gson.TypeAdapterFactory;
 import com.google.gson.reflect.TypeToken;
@@ -35,9 +33,6 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.SocketException;
 import java.nio.charset.Charset;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
 import java.util.function.Consumer;
 import javax.servlet.ServletException;
 import lombok.extern.slf4j.Slf4j;
@@ -57,6 +52,9 @@ import org.polypheny.db.config.RuntimeConfig;
 import org.polypheny.db.iface.Authenticator;
 import org.polypheny.db.information.InformationDuration;
 import org.polypheny.db.information.InformationDuration.Duration;
+import org.polypheny.db.information.InformationGroup;
+import org.polypheny.db.information.InformationPage;
+import org.polypheny.db.information.InformationStacktrace;
 import org.polypheny.db.transaction.TransactionManager;
 import org.polypheny.db.type.PolyType;
 import org.polypheny.db.webui.models.Result;
@@ -78,84 +76,55 @@ public class HttpServer implements Runnable {
             .setPrettyPrinting()
             .create();
 
+    public static final TypeAdapterFactory throwableTypeAdapterFactory;
+    public static final TypeAdapter<Throwable> throwableTypeAdapter;
+
 
     static {
-        //see https://futurestud.io/tutorials/gson-advanced-custom-serialization-part-1
-        JsonSerializer<DataStore> storeSerializer = ( src, typeOfSrc, context ) -> {
-
-            JsonObject jsonStore = new JsonObject();
-            jsonStore.addProperty( "adapterId", src.getAdapterId() );
-            jsonStore.addProperty( "uniqueName", src.getUniqueName() );
-            jsonStore.add( "adapterSettings", context.serialize( serializeSettings( src.getAvailableSettings(), src.getCurrentSettings() ) ) );
-            jsonStore.add( "currentSettings", context.serialize( src.getCurrentSettings() ) );
-            jsonStore.addProperty( "adapterName", src.getAdapterName() );
-            jsonStore.addProperty( "type", src.getClass().getCanonicalName() );
-            jsonStore.add( "persistent", context.serialize( src.isPersistent() ) );
-            jsonStore.add( "availableIndexMethods", context.serialize( src.getAvailableIndexMethods() ) );
-            return jsonStore;
-        };
-        JsonSerializer<DataSource> sourceSerializer = ( src, typeOfSrc, context ) -> {
-
-            JsonObject jsonSource = new JsonObject();
-            jsonSource.addProperty( "adapterId", src.getAdapterId() );
-            jsonSource.addProperty( "uniqueName", src.getUniqueName() );
-            jsonSource.addProperty( "adapterName", src.getAdapterName() );
-            jsonSource.add( "adapterSettings", context.serialize( serializeSettings( src.getAvailableSettings(), src.getCurrentSettings() ) ) );
-            jsonSource.add( "currentSettings", context.serialize( src.getCurrentSettings() ) );
-            jsonSource.add( "dataReadOnly", context.serialize( src.isDataReadOnly() ) );
-            jsonSource.addProperty( "type", src.getClass().getCanonicalName() );
-            return jsonSource;
-        };
-
-        JsonSerializer<AdapterInformation> adapterSerializer = ( src, typeOfSrc, context ) -> {
-            JsonObject jsonStore = new JsonObject();
-            jsonStore.addProperty( "name", src.name );
-            jsonStore.addProperty( "description", src.description );
-            jsonStore.addProperty( "clazz", src.clazz.getCanonicalName() );
-            jsonStore.add( "adapterSettings", context.serialize( src.settings ) );
-            return jsonStore;
-        };
-        TypeAdapterFactory throwableTypeAdapterFactory = new TypeAdapterFactory() {
-            @SuppressWarnings("unchecked")
+        throwableTypeAdapterFactory = new TypeAdapterFactory() {
             @Override
             public <T> TypeAdapter<T> create( Gson gson, TypeToken<T> type ) {
                 if ( !Throwable.class.isAssignableFrom( type.getRawType() ) ) {
                     return null;
                 }
+                //noinspection unchecked
                 return (TypeAdapter<T>) throwableTypeAdapter;
+            }
+        };
+        throwableTypeAdapter = new TypeAdapter<Throwable>() {
+            @Override
+            public void write( JsonWriter out, Throwable value ) throws IOException {
+                if ( value == null ) {
+                    out.nullValue();
+                    return;
+                }
+                out.beginObject();
+                out.name( "message" );
+                out.value( value.getMessage() );
+                out.endObject();
             }
 
 
-            final TypeAdapter<Throwable> throwableTypeAdapter = new TypeAdapter<Throwable>() {
-                @Override
-                public void write( JsonWriter out, Throwable value ) throws IOException {
-                    if ( value != null ) {
-                        out.beginObject();
-                        out.name( "message" );
-                        out.value( value.getMessage() );
-                        out.endObject();
-                    } else {
-                        out.nullValue();
-                    }
-                }
-
-
-                @Override
-                public Throwable read( JsonReader in ) throws IOException {
-                    return new Throwable( in.nextString() );
-                }
-            };
+            @Override
+            public Throwable read( JsonReader in ) throws IOException {
+                return new Throwable( in.nextString() );
+            }
         };
 
         gson = new GsonBuilder()
-                .registerTypeAdapter( DataSource.class, sourceSerializer )
-                .registerTypeAdapter( DataStore.class, storeSerializer )
-                .registerTypeAdapter( PolyType.class, PolyType.serializer )
-                .registerTypeAdapter( AdapterInformation.class, adapterSerializer )
+                .enableComplexMapKeySerialization()
+                .registerTypeAdapter( DataSource.class, DataSource.getSerializer() )
+                .registerTypeAdapter( DataStore.class, DataStore.getSerializer() )
+                .registerTypeAdapter( PolyType.class, PolyType.getSerializer() )
+                .registerTypeAdapter( AdapterInformation.class, AdapterInformation.getSerializer() )
                 .registerTypeAdapter( AbstractAdapterSetting.class, new AdapterSettingDeserializer() )
                 .registerTypeAdapterFactory( throwableTypeAdapterFactory )
                 .registerTypeAdapter( InformationDuration.class, InformationDuration.getSerializer() )
                 .registerTypeAdapter( Duration.class, Duration.getSerializer() )
+                .registerTypeAdapter( Result.class, Result.getSerializer() )
+                .registerTypeAdapter( InformationPage.class, InformationPage.getSerializer() )
+                .registerTypeAdapter( InformationGroup.class, InformationGroup.getSerializer() )
+                .registerTypeAdapter( InformationStacktrace.class, InformationStacktrace.getSerializer() )
                 .create();
     }
 
@@ -213,7 +182,7 @@ public class HttpServer implements Runnable {
 
         crudRoutes( server, crud );
 
-        StatusService.print( String.format( "Polypheny-UI started and is listening on port %d.", RuntimeConfig.WEBUI_SERVER_PORT.getInteger() ) );
+        StatusService.printInfo( String.format( "Polypheny-UI started and is listening on port %d.", RuntimeConfig.WEBUI_SERVER_PORT.getInteger() ) );
     }
 
 
@@ -372,6 +341,8 @@ public class HttpServer implements Runnable {
 
         webuiServer.get( "/getDocumentDatabases", crud.languageCrud::getDocumentDatabases );
 
+        webuiServer.get( "/product", ctx -> ctx.result( "Polypheny-DB" ) );
+
     }
 
 
@@ -440,17 +411,5 @@ public class HttpServer implements Runnable {
         } );
     }
 
-
-    private static List<AbstractAdapterSetting> serializeSettings( List<AbstractAdapterSetting> availableSettings, Map<String, String> currentSettings ) {
-        ArrayList<AbstractAdapterSetting> abstractAdapterSettings = new ArrayList<>();
-        for ( AbstractAdapterSetting s : availableSettings ) {
-            for ( String current : currentSettings.keySet() ) {
-                if ( s.name.equals( current ) ) {
-                    abstractAdapterSettings.add( s );
-                }
-            }
-        }
-        return abstractAdapterSettings;
-    }
 
 }
