@@ -191,34 +191,30 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
                 || (this.getJoinType() == JoinAlgType.INNER && left.getTable().getRowCount() < right.getTable().getRowCount());
 
         final Result enumerable = implementor.visitChild( this, preRouteRight ? 1 : 0, (EnumerableAlg) (preRouteRight ? right : left), pref );
-
-        boolean invertRowType = false;
-
         Expression exp = builder.append( "enumerable_" + System.nanoTime(), enumerable.block );
 
-        if ( joinType == JoinAlgType.INNER ) {
-            LogicalJoin join;
-            AlgNode node = getOriginalNode();
-            if ( node instanceof LogicalJoin ) {
-                join = (LogicalJoin) node;
-            } else if ( node.getInput( 0 ) instanceof LogicalJoin ) {
-                join = (LogicalJoin) node.getInput( 0 );
-            } else {
-                throw new RuntimeException( "No join found." );
-            }
-            if ( !join.getRowType().getFieldNames().equals( rowType.getFieldNames() ) ) {
-                // the left and right side was flipped so we adjust it back
-                AlgNode left = join.getLeft();
-                AlgNode right = join.getRight();
-                preRouteRight = !preRouteRight;
-                invertRowType = true;
-                join = LogicalJoin.create( right, left, condition, join.getVariablesSet(), joinType );
-            }
-
-            setOriginalNode( join );
+        LogicalJoin join;
+        AlgNode node = getOriginalNode();
+        if ( node instanceof LogicalJoin ) {
+            join = (LogicalJoin) node;
+        } else if ( node.getInput( 0 ) instanceof LogicalJoin ) {
+            join = (LogicalJoin) node.getInput( 0 );
+        } else {
+            throw new RuntimeException( "No join found." );
         }
 
-        byte[] nodeArray = Serializer.conf.asByteArray( getOriginalNode() );
+        if ( !join.getRowType().getFieldNames().equals( rowType.getFieldNames() ) ) {
+            // the left and right side was flipped, so we adjust it back
+            AlgNode left = join.getLeft();
+            AlgNode right = join.getRight();
+            // preRouteRight = !preRouteRight;
+            // invertRowType = true;
+            join = LogicalJoin.create( right, left, condition, join.getVariablesSet(), joinType );
+        }
+
+        setOriginalNode( join );
+
+        byte[] nodeArray = Serializer.conf.asByteArray( join );
         byte[] compressed = Serializer.compress( nodeArray );
 
         String name = builder.newName( "join_" + System.nanoTime() );
@@ -230,8 +226,6 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
                 Expressions.constant( DataContext.ROOT ),
                 exp,
                 nameExpr,
-                Expressions.constant( Serializer.conf.asByteArray( rowType ) ),
-                Expressions.constant( invertRowType ),
                 Expressions.constant( preRouteRight ? PRE_ROUTE.RIGHT : PRE_ROUTE.LEFT ) );
         builder.add( Expressions.return_( null, builder.append( "collector_" + System.nanoTime(), result ) ) );
 

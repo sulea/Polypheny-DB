@@ -72,7 +72,6 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
@@ -351,18 +350,10 @@ public class Functions {
 
 
     @SuppressWarnings("unused")
-    public static Enumerable<?> routeJoinFilter( final DataContext context, final Enumerable<Object[]> baz, byte[] other, byte[] serRowType, boolean invertRowType, PRE_ROUTE preRoute ) {
+    public static Enumerable<?> routeJoinFilter( final DataContext context, final Enumerable<Object[]> baz, byte[] other, PRE_ROUTE preRoute ) {
         byte[] uncompressed = Serializer.decompress( other );
-        AlgNode node = (AlgNode) Serializer.conf.asObject( uncompressed );
-        AlgDataType rowType = (AlgDataType) Serializer.conf.asObject( serRowType );
-        LogicalJoin join;
-        if ( node instanceof LogicalJoin ) {
-            join = (LogicalJoin) node;
-        } else if ( node.getInput( 0 ) instanceof LogicalJoin ) {
-            join = (LogicalJoin) node.getInput( 0 );
-        } else {
-            throw new RuntimeException( "No join found." );
-        }
+        LogicalJoin join = (LogicalJoin) Serializer.conf.asObject( uncompressed );
+        boolean executedRight = preRoute == PRE_ROUTE.RIGHT;
 
         List<Object[]> filters = new ArrayList<>();
         for ( Object[] objects : baz ) {
@@ -371,18 +362,15 @@ public class Functions {
         AlgBuilder builder = AlgBuilder.create( context.getStatement() );
         RexBuilder rexBuilder = builder.getRexBuilder();
 
-        node.accept( new ClusterSetter( builder.getCluster() ) );
+        join.accept( new ClusterSetter( builder.getCluster() ) );
 
-        boolean preRouteRight = preRoute == PRE_ROUTE.RIGHT;
-
-        ConditionExtractor extractor = new ConditionExtractor( preRouteRight, rexBuilder, join.getLeft().getRowType().getFieldCount() );
+        ConditionExtractor extractor = new ConditionExtractor( executedRight, rexBuilder, join.getLeft().getRowType().getFieldCount() );
 
         join.accept( extractor );
 
-        builder.push( preRouteRight ? join.getLeft() : join.getRight() );
+        builder.push( executedRight ? join.getLeft() : join.getRight() );
 
         List<RexNode> nodes = new ArrayList<>();
-
         for ( Object[] row : filters ) {
             List<RexNode> ands = new ArrayList<>();
             int pos = 0;
@@ -393,7 +381,7 @@ public class Functions {
                     continue;
                 }
                 RexInputRef actual = extractor.projects.get( pos );
-                if ( actual.getIndex() == (pos + offset) ) {
+                if ( actual.getIndex() != (pos + offset) ) {
                     // we get too many results and have to ignore the unnecessary ones
                     offset++;
                     continue;
@@ -419,29 +407,14 @@ public class Functions {
             prepared = builder.filter( nodes.get( 0 ) ).build();
         } else {
             // there seems to be nothing in the pre-routed side, maybe we use an empty values?
-            prepared = preRouteRight ? join.getLeft() : join.getRight();
+            prepared = executedRight ? join.getLeft() : join.getRight();
         }
         //AlgNode values = builder.values().build();
-        builder.push( preRouteRight ? prepared : join.getLeft() );
-        builder.push( preRouteRight ? join.getRight() : prepared );
+        builder.push( executedRight ? prepared : join.getLeft() );
+        builder.push( executedRight ? join.getRight() : prepared );
         builder.join( join.getJoinType(), join.getCondition() );
 
-        // we cannot be sure the order is correct, so we have to fix that by adjusting it
         AlgNode build = builder.build();
-        List<String> names = rowType.getFieldNames();
-        Set<String> newNames = new LinkedHashSet<>();
-        for ( String name : names ) {
-            String newName = name;
-            for ( int i = 0; !newNames.add( newName ); i++ ) {
-                newName = name + i;
-            }
-        }
-        builder.push( build );
-        builder.rename( new ArrayList<>( newNames ) );
-
-        // even when reordered it gets put back incorrectly..
-        builder.project( names.stream().map( builder::field ).collect( Collectors.toList() ) );
-        build = builder.build();
 
         PolyResult result = context
                 .getStatement()
@@ -611,8 +584,10 @@ public class Functions {
 
         @Getter
         private final List<RexNode> filters = new ArrayList<>();
+        // projects on side of executed node
         @Getter
         private List<RexInputRef> projects = new ArrayList<>();
+        // projects other side
         @Getter
         private List<RexInputRef> otherProjects = new ArrayList<>();
 
