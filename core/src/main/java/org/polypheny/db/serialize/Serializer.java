@@ -18,6 +18,7 @@ package org.polypheny.db.serialize;
 
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterOutputStream;
 import org.nustaq.serialization.FSTConfiguration;
@@ -30,16 +31,14 @@ public class Serializer {
     public static byte[] compress( byte[] in ) {
         try {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
-            DeflaterOutputStream defl = new DeflaterOutputStream( out );
-            defl.write( in );
-            defl.flush();
-            defl.close();
+            DeflaterOutputStream deflate = new DeflaterOutputStream( out );
+            deflate.write( in );
+            deflate.flush();
+            deflate.close();
 
             return out.toByteArray();
-        } catch ( Exception e ) {
-            e.printStackTrace();
-            System.exit( 150 );
-            return null;
+        } catch ( IOException e ) {
+            throw new RuntimeException( "The compression of the received byte array was not successful." );
         }
     }
 
@@ -47,17 +46,35 @@ public class Serializer {
     public static byte[] decompress( byte[] in ) {
         try {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
-            InflaterOutputStream infl = new InflaterOutputStream( out );
-            infl.write( in );
-            infl.flush();
-            infl.close();
+            InflaterOutputStream inflate = new InflaterOutputStream( out );
+            inflate.write( in );
+            inflate.flush();
+            inflate.close();
 
             return out.toByteArray();
-        } catch ( Exception e ) {
-            e.printStackTrace();
-            System.exit( 150 );
-            return null;
+        } catch ( IOException e ) {
+            throw new RuntimeException( "The decompression of the received byte array was not successful." );
         }
+    }
+
+
+    public static byte[] asByteArray( Object object ) {
+        return conf.asByteArray( object );
+    }
+
+
+    public static byte[] asCompressedByteArray( Object object ) {
+        return compress( asByteArray( object ) );
+    }
+
+
+    public static <T> T asObject( byte[] array, Class<T> clazz ) {
+        return clazz.cast( conf.asObject( array ) );
+    }
+
+
+    public static <T> T asDecompressedObject( byte[] array, Class<T> clazz ) {
+        return asObject( decompress( array ), clazz );
     }
 
 }

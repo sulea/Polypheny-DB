@@ -351,8 +351,7 @@ public class Functions {
 
     @SuppressWarnings("unused")
     public static Enumerable<?> routeJoinFilter( final DataContext context, final Enumerable<Object[]> baz, byte[] other, PRE_ROUTE preRoute ) {
-        byte[] uncompressed = Serializer.decompress( other );
-        LogicalJoin join = (LogicalJoin) Serializer.conf.asObject( uncompressed );
+        LogicalJoin join = Serializer.asDecompressedObject( other, LogicalJoin.class );
         boolean executedRight = preRoute == PRE_ROUTE.RIGHT;
         boolean transformToValues = false;
 

@@ -214,8 +214,7 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
 
         setOriginalNode( join );
 
-        byte[] nodeArray = Serializer.conf.asByteArray( join );
-        byte[] compressed = Serializer.compress( nodeArray );
+        byte[] compressed = Serializer.asCompressedByteArray( join );
 
         String name = builder.newName( "join_" + System.nanoTime() );
         ParameterExpression nameExpr = Expressions.parameter( byte[].class, name );
