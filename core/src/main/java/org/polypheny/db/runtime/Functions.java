@@ -353,7 +353,7 @@ public class Functions {
     public static Enumerable<?> routeJoinFilter( final DataContext context, final Enumerable<Object[]> baz, byte[] other, PRE_ROUTE preRoute ) {
         LogicalJoin join = Serializer.asDecompressedObject( other, LogicalJoin.class );
         boolean executedRight = preRoute == PRE_ROUTE.RIGHT;
-        boolean transformToValues = false;
+        boolean transformToValues = true;
 
         List<Object[]> receivedValues = new ArrayList<>();
         for ( Object[] objects : baz ) {
