@@ -277,10 +277,21 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
                 this.algOptSchema = scan.getTable().getRelOptSchema();
                 this.builder = AlgFactories.LOGICAL_BUILDER.create( cluster, algOptSchema );
             }
-            List<String> names = new ArrayList<>( Arrays.asList( scan.getTable().getQualifiedName().get( scan.getTable().getQualifiedName().size() - 1 ).split( "_" ) ) );
-            names = names.subList( 0, names.size() - 1 );
-            builder.scan( String.join( "_", names ) );
+            builder.scan( getLogicalTableName( scan.getTable() ) );
             return scan;
+        }
+
+
+        private static List<String> getLogicalTableName( AlgOptTable table ) {
+            List<String> originalNames = table.getQualifiedName();
+            // [name]_[partitionId]
+            List<String> names = new ArrayList<>( Arrays.asList( originalNames.get( 1 ).split( "_" ) ) );
+            names = names.subList( 0, names.size() - 1 );
+
+            // [storeName]_[name]_[adapter]
+            List<String> schemas = new ArrayList<>( Arrays.asList( originalNames.get( 0 ).split( "_" ) ) );
+            schemas = schemas.subList( 1, schemas.size() - 1 );
+            return Arrays.asList( String.join( "_", schemas ), String.join( "_", names ) );
         }
 
 

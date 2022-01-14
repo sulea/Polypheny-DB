@@ -25,6 +25,7 @@ import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.polypheny.db.AdapterTestSuite;
@@ -52,6 +53,7 @@ public class JoinTest {
         try ( JdbcConnection jdbcConnection = new JdbcConnection( false ) ) {
             Connection connection = jdbcConnection.getConnection();
             try ( Statement statement = connection.createStatement() ) {
+                statement.executeUpdate( "CREATE SCHEMA joinTest" );
                 statement.executeUpdate( "CREATE TABLE TableA(ID VARCHAR(255) NOT NULL, NAME VARCHAR(255), AMOUNT INTEGER, PRIMARY KEY (ID))" );
                 statement.executeUpdate( "INSERT INTO TableA VALUES ('Ab', 'Name1', 10000.00)" );
                 statement.executeUpdate( "INSERT INTO TableA VALUES ('Bc', 'Name2',  5000.00)" );
@@ -65,8 +67,8 @@ public class JoinTest {
                 statement.executeUpdate( "CREATE TABLE TableC(AMOUNT INTEGER NOT NULL, PRIMARY KEY (AMOUNT))" );
                 statement.executeUpdate( "INSERT INTO TableC VALUES (10000)" );
 
-                statement.executeUpdate( "CREATE TABLE Table_C(AMOUNT INTEGER NOT NULL, PRIMARY KEY (AMOUNT))" );
-                statement.executeUpdate( "INSERT INTO Table_C VALUES (10000)" );
+                statement.executeUpdate( "CREATE TABLE joinTest.Table_C(AMOUNT INTEGER NOT NULL, PRIMARY KEY (AMOUNT))" );
+                statement.executeUpdate( "INSERT INTO joinTest.Table_C VALUES (10000)" );
 
                 connection.commit();
             }
@@ -81,6 +83,9 @@ public class JoinTest {
             try ( Statement statement = connection.createStatement() ) {
                 statement.executeUpdate( "DROP TABLE TableA" );
                 statement.executeUpdate( "DROP TABLE TableB" );
+                statement.executeUpdate( "DROP TABLE TableC" );
+                statement.executeUpdate( "DROP TABLE joinTest.Table_C" );
+                statement.executeUpdate( "DROP SCHEMA joinTest" );
             }
             connection.commit();
         }
@@ -151,7 +156,24 @@ public class JoinTest {
                         new Object[]{ "Ab", "Name1", 10000, "Ab", 400, "Ab", 10000 }
                 );
                 TestHelper.checkResultSet(
-                        statement.executeQuery( "SELECT * FROM TableA, TableB, Table_C WHERE TableA.Amount = Table_C.Amount AND TableB.ID = TableA.ID" ),
+                        statement.executeQuery( "SELECT * FROM TableA, TableB, joinTest.Table_C WHERE TableA.Amount = joinTest.Table_C.Amount AND TableB.ID = TableA.ID" ),
+                        expectedResult,
+                        true );
+            }
+        }
+    }
+
+
+    @Test
+    public void twoNaturalJoinMixSchemaTests() throws SQLException {
+        try ( TestHelper.JdbcConnection polyphenyDbConnection = new TestHelper.JdbcConnection( true ) ) {
+            Connection connection = polyphenyDbConnection.getConnection();
+            try ( Statement statement = connection.createStatement() ) {
+                List<Object[]> expectedResult = ImmutableList.of(
+                        new Object[]{ "Ab", "Name1", 10000, "Ab", 400, "Ab", 10000 }
+                );
+                TestHelper.checkResultSet(
+                        statement.executeQuery( "SELECT * FROM TableA, TableB, joinTest.Table_C WHERE TableA.Amount = joinTest.Table_C.Amount AND TableB.ID = TableA.ID" ),
                         expectedResult,
                         true );
             }
@@ -255,7 +277,6 @@ public class JoinTest {
 
 
     @Test
-    // todo dl, rewrite this test
     public void rightTwoJoinTest() throws SQLException {
         try ( TestHelper.JdbcConnection polyphenyDbConnection = new TestHelper.JdbcConnection( true ) ) {
             Connection connection = polyphenyDbConnection.getConnection();
@@ -286,6 +307,30 @@ public class JoinTest {
                 );
                 TestHelper.checkResultSet(
                         statement.executeQuery( "SELECT * FROM (SELECT id, name FROM TableA) AS S FULL JOIN (SELECT name, Amount  FROM TableA) AS T ON S.name = T.name" ),
+                        expectedResult,
+                        true );
+            }
+        }
+    }
+
+
+    @Test
+    @Ignore
+    public void complexJoinTests() throws SQLException {
+        try ( TestHelper.JdbcConnection polyphenyDbConnection = new TestHelper.JdbcConnection( true ) ) {
+            Connection connection = polyphenyDbConnection.getConnection();
+            try ( Statement statement = connection.createStatement() ) {
+                List<Object[]> expectedResult = ImmutableList.of(
+                        new Object[]{ "Name1", "Ab", 10000 },
+                        new Object[]{ "Name2", "Bc", 5000 },
+                        new Object[]{ "Name3", "Cd", 7000 }
+                );
+                TestHelper.checkResultSet(
+                        statement.executeQuery( "SELECT * FROM "
+                                + "(SELECT id, distance(feature, ARRAY[0.76694137,0.16232862,0.4724879], 'L2') as dist "
+                                + "FROM cineast.features_averagecolor ORDER BY dist ASC LIMIT 500) AS feature "
+                                + "INNER JOIN cineast.cineast_segment AS segment ON (feature.id = segment.segmentid) "
+                                + "INNER JOIN cineast.cineast_multimediaobject AS object ON (segment.objectid = object.objectid)" ),
                         expectedResult,
                         true );
             }
