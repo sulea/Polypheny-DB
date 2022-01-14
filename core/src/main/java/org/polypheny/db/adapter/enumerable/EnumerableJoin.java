@@ -35,6 +35,9 @@ package org.polypheny.db.adapter.enumerable;
 
 
 import com.google.common.collect.ImmutableList;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Set;
 import org.apache.calcite.linq4j.tree.BlockBuilder;
 import org.apache.calcite.linq4j.tree.Expression;
@@ -274,7 +277,9 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
                 this.algOptSchema = scan.getTable().getRelOptSchema();
                 this.builder = AlgFactories.LOGICAL_BUILDER.create( cluster, algOptSchema );
             }
-            builder.scan( scan.getTable().getQualifiedName().get( scan.getTable().getQualifiedName().size() - 1 ).split( "_" )[0] );
+            List<String> names = new ArrayList<>( Arrays.asList( scan.getTable().getQualifiedName().get( scan.getTable().getQualifiedName().size() - 1 ).split( "_" ) ) );
+            names = names.subList( 0, names.size() - 1 );
+            builder.scan( String.join( "_", names ) );
             return scan;
         }
 

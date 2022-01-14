@@ -65,6 +65,9 @@ public class JoinTest {
                 statement.executeUpdate( "CREATE TABLE TableC(AMOUNT INTEGER NOT NULL, PRIMARY KEY (AMOUNT))" );
                 statement.executeUpdate( "INSERT INTO TableC VALUES (10000)" );
 
+                statement.executeUpdate( "CREATE TABLE Table_C(AMOUNT INTEGER NOT NULL, PRIMARY KEY (AMOUNT))" );
+                statement.executeUpdate( "INSERT INTO Table_C VALUES (10000)" );
+
                 connection.commit();
             }
         }
@@ -133,6 +136,22 @@ public class JoinTest {
                 );
                 TestHelper.checkResultSet(
                         statement.executeQuery( "SELECT * FROM TableA, TableB, TableC WHERE TableA.Amount = TableC.Amount AND TableB.ID = TableA.ID" ),
+                        expectedResult,
+                        true );
+            }
+        }
+    }
+
+    @Test
+    public void twoNaturalJoinUnderscoreTests() throws SQLException {
+        try ( TestHelper.JdbcConnection polyphenyDbConnection = new TestHelper.JdbcConnection( true ) ) {
+            Connection connection = polyphenyDbConnection.getConnection();
+            try ( Statement statement = connection.createStatement() ) {
+                List<Object[]> expectedResult = ImmutableList.of(
+                        new Object[]{ "Ab", "Name1", 10000, "Ab", 400, "Ab", 10000 }
+                );
+                TestHelper.checkResultSet(
+                        statement.executeQuery( "SELECT * FROM TableA, TableB, Table_C WHERE TableA.Amount = Table_C.Amount AND TableB.ID = TableA.ID" ),
                         expectedResult,
                         true );
             }

@@ -395,14 +395,11 @@ public class Functions {
                 }
                 RexInputRef ref = extractor.otherProjects.get( pos );
                 ands.add(
-                        rexBuilder.makeCall(
-                                OperatorRegistry.get( OperatorName.EQUALS ),
-                                builder.field( ref.getIndex() ),
-                                rexBuilder.makeLiteral( o, ref.getType(), false ) ) );
+                        builder.equals( builder.field( ref.getIndex() ), rexBuilder.makeLiteral( o, ref.getType(), false ) ) );
                 pos++;
             }
             if ( ands.size() > 1 ) {
-                nodes.add( rexBuilder.makeCall( OperatorRegistry.get( OperatorName.AND ), ands ) );
+                nodes.add( builder.and( ands ) );
             } else {
                 nodes.add( ands.get( 0 ) );
             }
@@ -414,7 +411,6 @@ public class Functions {
         } else if ( nodes.size() == 1 ) {
             builder.filter( nodes.get( 0 ) );
         }
-        // there seems to be nothing in the pre-routed side, maybe we use an empty values?
         AlgNode left;
         AlgNode right;
         AlgNode prepared = builder.build();
@@ -422,23 +418,19 @@ public class Functions {
             left = executedRight ? prepared : join.getLeft();
             right = executedRight ? join.getRight() : prepared;
         } else {
-            AlgNode values = builder.valuesRows( executedRight ? join.getRight().getRowType() : join.getLeft().getRowType(), receivedValues ).build();
-
-            left = executedRight ? prepared : values;
-            right = executedRight ? values : prepared;
+            builder.valuesRows( executedRight ? join.getRight().getRowType() : join.getLeft().getRowType(), receivedValues );
+            left = executedRight ? prepared : builder.build();
+            right = executedRight ? builder.build() : prepared;
         }
         builder.push( left );
         builder.push( right );
         builder.join( join.getJoinType(), join.getCondition() );
 
-        AlgNode build = builder.build();
-        build.getRowType();
-
         PolyResult result = context
                 .getStatement()
                 .getQueryProcessor()
                 .prepareQuery(
-                        AlgRoot.of( build, Kind.SELECT ),
+                        AlgRoot.of( builder.build(), Kind.SELECT ),
                         rexBuilder.getTypeFactory().builder().build(),
                         false,
                         true,
