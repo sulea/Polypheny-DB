@@ -37,6 +37,7 @@ package org.polypheny.db.rex;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Ordering;
 import java.io.PrintWriter;
+import java.io.Serializable;
 import java.io.StringWriter;
 import java.util.AbstractList;
 import java.util.ArrayList;
@@ -72,7 +73,7 @@ import org.polypheny.db.util.Permutation;
  *
  * @see RexProgramBuilder
  */
-public class RexProgram {
+public class RexProgram implements Serializable {
 
     /**
      * First stage of expression evaluation. The expressions in this array can refer to inputs (using input ordinal #0) or previous expressions in the array (using input ordinal #1).

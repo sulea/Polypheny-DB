@@ -87,6 +87,7 @@ import org.polypheny.db.algebra.core.TableScan;
 import org.polypheny.db.algebra.core.Union;
 import org.polypheny.db.algebra.core.Values;
 import org.polypheny.db.algebra.fun.AggFunction;
+import org.polypheny.db.algebra.logical.LogicalCalc;
 import org.polypheny.db.algebra.logical.LogicalFilter;
 import org.polypheny.db.algebra.logical.LogicalProject;
 import org.polypheny.db.algebra.metadata.AlgMetadataQuery;
@@ -111,6 +112,7 @@ import org.polypheny.db.rex.RexExecutor;
 import org.polypheny.db.rex.RexInputRef;
 import org.polypheny.db.rex.RexLiteral;
 import org.polypheny.db.rex.RexNode;
+import org.polypheny.db.rex.RexProgram;
 import org.polypheny.db.rex.RexShuttle;
 import org.polypheny.db.rex.RexSimplify;
 import org.polypheny.db.rex.RexUtil;
@@ -353,8 +355,8 @@ public class AlgBuilder {
      * Adds an alg node to the top of the stack while preserving the field names and aliases.
      */
     public void replaceTop( AlgNode node, int amount ) {
-        final Frame frame = stack.peek();
-        for ( int i = 0; i < amount; i++ ) {
+        final Frame frame = stack.pop();
+        for ( int i = 0; i < amount - 1; i++ ) {
             stack.pop();
         }
         stack.push( new Frame( node, frame.fields ) );
@@ -2147,12 +2149,19 @@ public class AlgBuilder {
      * @param rowType the RowType of the columns
      * @param rowColumnValues the collection of values
      */
-    public AlgBuilder values( AlgDataType rowType, List<Object[]> rowColumnValues ) {
+    public AlgBuilder valuesRows( AlgDataType rowType, List<Object[]> rowColumnValues ) {
         final ImmutableList.Builder<ImmutableList<RexLiteral>> builder = ImmutableList.builder();
         for ( Object[] columnValues : rowColumnValues ) {
             builder.add( tupleList( rowType.getFieldCount(), columnValues ).get( 0 ) );
         }
         AlgNode values = valuesFactory.createValues( cluster, rowType, builder.build() );
+        push( values );
+        return this;
+    }
+
+
+    public AlgBuilder valuesRows( AlgDataType rowType, ImmutableList<ImmutableList<RexLiteral>> rowColumnValues ) {
+        AlgNode values = valuesFactory.createValues( cluster, rowType, rowColumnValues );
         push( values );
         return this;
     }
@@ -2504,6 +2513,12 @@ public class AlgBuilder {
      */
     public void clear() {
         stack.clear();
+    }
+
+
+    public AlgBuilder calc( RexProgram program ) {
+        stack.push( new Frame( LogicalCalc.create( stack.pop().alg, program ) ) );
+        return this;
     }
 
 

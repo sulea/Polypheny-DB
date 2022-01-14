@@ -47,7 +47,6 @@ import org.polypheny.db.adapter.enumerable.EnumerableAlg.Prefer;
 import org.polypheny.db.adapter.enumerable.EnumerableCalc;
 import org.polypheny.db.adapter.enumerable.EnumerableConvention;
 import org.polypheny.db.adapter.enumerable.EnumerableInterpretable;
-import org.polypheny.db.adapter.enumerable.EnumerableJoin;
 import org.polypheny.db.adapter.index.Index;
 import org.polypheny.db.adapter.index.IndexManager;
 import org.polypheny.db.algebra.AlgCollation;
@@ -65,11 +64,9 @@ import org.polypheny.db.algebra.core.ConditionalExecute;
 import org.polypheny.db.algebra.core.ConditionalExecute.Condition;
 import org.polypheny.db.algebra.core.ConditionalTableModify;
 import org.polypheny.db.algebra.core.ConstraintEnforcer;
-import org.polypheny.db.algebra.core.Join;
 import org.polypheny.db.algebra.core.Sort;
 import org.polypheny.db.algebra.core.Values;
 import org.polypheny.db.algebra.logical.LogicalConditionalExecute;
-import org.polypheny.db.algebra.logical.LogicalJoin;
 import org.polypheny.db.algebra.logical.LogicalProject;
 import org.polypheny.db.algebra.logical.LogicalTableModify;
 import org.polypheny.db.algebra.logical.LogicalTableScan;
@@ -542,11 +539,6 @@ public abstract class AbstractQueryProcessor implements QueryProcessor, Executio
             statement.getProcessingDuration().start( "Implementation" );
         }
 
-        if ( !isSubQuery ) {
-            for ( AlgNode n : optimalNodeList ) {
-                n.accept( new OriginalNodeSetter( logicalRoot.alg ) );
-            }
-        }
 
         for ( int i = 0; i < optimalNodeList.size(); i++ ) {
             if ( results.get( i ) != null ) {
@@ -597,34 +589,6 @@ public abstract class AbstractQueryProcessor implements QueryProcessor, Executio
                 results.stream().filter( Objects::nonNull ).collect( Collectors.toList() ),
                 generatedCodes.stream().filter( Objects::nonNull ).collect( Collectors.toList() ),
                 logicalQueryInformation );
-    }
-
-
-    static public class OriginalNodeSetter extends AlgShuttleImpl {
-
-        private final AlgNode originalNode;
-
-
-        public OriginalNodeSetter( AlgNode originalNode ) {
-            this.originalNode = originalNode;
-        }
-
-
-        @Override
-        public AlgNode visit( LogicalJoin join ) {
-
-            return super.visit( join );
-        }
-
-
-        @Override
-        public AlgNode visit( AlgNode other ) {
-            if ( other instanceof Join ) {
-                ((EnumerableJoin) other).setOriginalNode( originalNode );
-            }
-            return super.visit( other );
-        }
-
     }
 
 

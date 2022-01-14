@@ -2443,6 +2443,11 @@ public class RexUtil {
             if ( refType2 == rightType ) {
                 return new RexInputRef( ref.getIndex(), refType2 );
             }
+
+            // due to serialization this is sometimes needed
+            if ( refType2.equals( rightType ) ) {
+                return new RexInputRef( ref.getIndex(), refType2 );
+            }
             throw new AssertionError( "mismatched type " + ref + " " + rightType );
         }
 

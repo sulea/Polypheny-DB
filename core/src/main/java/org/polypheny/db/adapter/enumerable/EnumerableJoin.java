@@ -35,14 +35,7 @@ package org.polypheny.db.adapter.enumerable;
 
 
 import com.google.common.collect.ImmutableList;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
 import java.util.Set;
-import java.util.stream.Collectors;
-import lombok.Getter;
-import lombok.Setter;
-import lombok.experimental.Accessors;
 import org.apache.calcite.linq4j.tree.BlockBuilder;
 import org.apache.calcite.linq4j.tree.Expression;
 import org.apache.calcite.linq4j.tree.Expressions;
@@ -51,28 +44,36 @@ import org.polypheny.db.adapter.DataContext;
 import org.polypheny.db.algebra.AlgCollationTraitDef;
 import org.polypheny.db.algebra.AlgNode;
 import org.polypheny.db.algebra.AlgNodes;
+import org.polypheny.db.algebra.AlgShuttleImpl;
 import org.polypheny.db.algebra.InvalidAlgException;
+import org.polypheny.db.algebra.core.AlgFactories;
+import org.polypheny.db.algebra.core.Calc;
 import org.polypheny.db.algebra.core.CorrelationId;
 import org.polypheny.db.algebra.core.EquiJoin;
+import org.polypheny.db.algebra.core.Filter;
 import org.polypheny.db.algebra.core.Join;
 import org.polypheny.db.algebra.core.JoinAlgType;
 import org.polypheny.db.algebra.core.JoinInfo;
-import org.polypheny.db.algebra.logical.LogicalJoin;
+import org.polypheny.db.algebra.core.Project;
+import org.polypheny.db.algebra.core.TableScan;
+import org.polypheny.db.algebra.core.Values;
 import org.polypheny.db.algebra.metadata.AlgMdCollation;
 import org.polypheny.db.algebra.metadata.AlgMetadataQuery;
 import org.polypheny.db.plan.AlgOptCluster;
 import org.polypheny.db.plan.AlgOptCost;
 import org.polypheny.db.plan.AlgOptPlanner;
+import org.polypheny.db.plan.AlgOptSchema;
+import org.polypheny.db.plan.AlgOptTable;
 import org.polypheny.db.plan.AlgTraitSet;
-import org.polypheny.db.rex.RexBuilder;
-import org.polypheny.db.rex.RexCall;
-import org.polypheny.db.rex.RexInputRef;
+import org.polypheny.db.rex.RexLiteral;
+import org.polypheny.db.rex.RexLocalRef;
 import org.polypheny.db.rex.RexNode;
-import org.polypheny.db.rex.RexShuttle;
-import org.polypheny.db.rex.RexVisitorImpl;
+import org.polypheny.db.rex.RexProgram;
 import org.polypheny.db.serialize.Serializer;
+import org.polypheny.db.tools.AlgBuilder;
 import org.polypheny.db.util.BuiltInMethod;
 import org.polypheny.db.util.ImmutableIntList;
+import org.polypheny.db.util.Permutation;
 import org.polypheny.db.util.Util;
 
 
@@ -80,10 +81,6 @@ import org.polypheny.db.util.Util;
  * Implementation of {@link Join} in {@link EnumerableConvention enumerable calling convention}.
  */
 public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
-
-    @Setter
-    @Accessors(fluent = true)
-    private AlgNode node;
 
 
     /**
@@ -112,7 +109,7 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
         final JoinInfo joinInfo = JoinInfo.of( left, right, condition );
         assert joinInfo.isEqui();
         try {
-            return new EnumerableJoin( getCluster(), traitSet, left, right, condition, joinInfo.leftKeys, joinInfo.rightKeys, variablesSet, joinType ).node( node );
+            return new EnumerableJoin( getCluster(), traitSet, left, right, condition, joinInfo.leftKeys, joinInfo.rightKeys, variablesSet, joinType );
         } catch ( InvalidAlgException e ) {
             // Semantic error not possible. Must be a bug. Convert to internal error.
             throw new AssertionError( e );
@@ -177,44 +174,32 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
 
     @Override
     public Result implement( EnumerableAlgImplementor implementor, Prefer pref ) {
-        if ( getOriginalNode() != null ) {
-            return getPreparedResult( implementor, pref );
+        if ( !(left instanceof Values || right instanceof Values) ) {
+            return getOptimizedResult( implementor, pref );
         } else {
             return getDefaultResult( implementor, pref );
         }
     }
 
 
-    private Result getPreparedResult( EnumerableAlgImplementor implementor, Prefer pref ) {
+    private Result getOptimizedResult( EnumerableAlgImplementor implementor, Prefer pref ) {
         BlockBuilder builder = new BlockBuilder();
         boolean preRouteRight = this.getJoinType() != JoinAlgType.LEFT
                 || (this.getJoinType() == JoinAlgType.INNER && left.getTable().getRowCount() < right.getTable().getRowCount());
 
+        if ( condition instanceof RexLiteral && condition.isAlwaysTrue() ) {
+            // cross product cannot be optimized
+            return getDefaultResult( implementor, pref );
+        }
+
         final Result enumerable = implementor.visitChild( this, preRouteRight ? 1 : 0, (EnumerableAlg) (preRouteRight ? right : left), pref );
         Expression exp = builder.append( "enumerable_" + System.nanoTime(), enumerable.block );
 
-        LogicalJoin join;
-        AlgNode node = getOriginalNode();
-        if ( node instanceof LogicalJoin ) {
-            join = (LogicalJoin) node;
-        } else if ( node.getInput( 0 ) instanceof LogicalJoin ) {
-            join = (LogicalJoin) node.getInput( 0 );
-        } else {
-            throw new RuntimeException( "No join found." );
-        }
+        LogicalRebuilder rebuilder = new LogicalRebuilder( getCluster(), getTable() );
+        this.accept( rebuilder );
+        AlgNode rebuild = rebuilder.builder.build();
 
-        if ( !join.getRowType().getFieldNames().equals( rowType.getFieldNames() ) ) {
-            // the left and right side was flipped, so we adjust it back
-            AlgNode left = join.getLeft();
-            AlgNode right = join.getRight();
-            // preRouteRight = !preRouteRight;
-            // invertRowType = true;
-            join = LogicalJoin.create( right, left, condition, join.getVariablesSet(), joinType );
-        }
-
-        setOriginalNode( join );
-
-        byte[] compressed = Serializer.asCompressedByteArray( join );
+        byte[] compressed = Serializer.asCompressedByteArray( rebuild );
 
         String name = builder.newName( "join_" + System.nanoTime() );
         ParameterExpression nameExpr = Expressions.parameter( byte[].class, name );
@@ -240,84 +225,6 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
     public enum PRE_ROUTE {
         LEFT,
         RIGHT
-    }
-
-
-    public static class ConditionExtractor extends RexShuttle {
-
-        private final boolean preRouteRight;
-        private final RexBuilder rexBuilder;
-        private final long leftSize;
-
-        @Getter
-        private final List<RexNode> filters = new ArrayList<>();
-        @Getter
-        private final List<RexInputRef> projects = new ArrayList<>();
-        @Getter
-        private final List<RexInputRef> otherProjects = new ArrayList<>();
-
-
-        public ConditionExtractor( boolean preRouteRight, RexBuilder rexBuilder, long leftSize ) {
-            this.preRouteRight = preRouteRight;
-            this.rexBuilder = rexBuilder;
-            this.leftSize = leftSize;
-        }
-
-
-        @Override
-        public RexNode visitInputRef( RexInputRef inputRef ) {
-            RexInputRef project = null;
-            RexInputRef otherProject = null;
-
-            if ( inputRef.getIndex() >= leftSize ) {
-                // is from right
-                if ( preRouteRight ) {
-                    project = rexBuilder.makeInputRef( inputRef.getType(), (int) (inputRef.getIndex() - leftSize) );
-                } else {
-                    // add not routed ref into other projection collection to use it after
-                    otherProject = rexBuilder.makeInputRef( inputRef.getType(), (int) (inputRef.getIndex() - leftSize) );
-                }
-            } else {
-                // is from left
-                if ( !preRouteRight ) {
-                    project = rexBuilder.makeInputRef( inputRef.getType(), inputRef.getIndex() );
-                } else {
-                    otherProject = rexBuilder.makeInputRef( inputRef.getType(), inputRef.getIndex() );
-                }
-            }
-
-            if ( project != null ) {
-                projects.add( project );
-            }
-            if ( otherProject != null ) {
-                otherProjects.add( otherProject );
-            }
-
-            return project;
-        }
-
-
-        @Override
-        public RexNode visitCall( RexCall call ) {
-            List<RexNode> nodes = call.operands.stream().map( c -> c.accept( this ) ).filter( Objects::nonNull ).collect( Collectors.toList() );
-
-            if ( nodes.size() == 1 ) {
-                return nodes.get( 0 );
-            } else if ( nodes.size() == 0 ) {
-                return null;
-            }
-
-            switch ( call.op.getOperatorName() ) {
-                case EQUALS:
-                case NOT_EQUALS:
-                    filters.add( rexBuilder.makeCall( call.op, nodes ) );
-                case AND:
-                case OR:
-                default:
-                    return call;
-            }
-        }
-
     }
 
 
@@ -347,22 +254,67 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
     }
 
 
-    private static class ConditionInverter extends RexVisitorImpl {
+    private static class LogicalRebuilder extends AlgShuttleImpl {
 
-        private final int leftSize;
-        private final RexBuilder builder;
+        private AlgBuilder builder;
+        private final AlgOptCluster cluster;
+        private AlgOptSchema algOptSchema;
 
 
-        protected ConditionInverter( int leftSize, RexBuilder builder ) {
-            super( true );
-            this.leftSize = leftSize;
-            this.builder = builder;
+        public LogicalRebuilder( AlgOptCluster cluster, AlgOptTable algOptTable ) {
+            this.algOptSchema = algOptTable == null ? null : algOptTable.getRelOptSchema();
+            this.cluster = cluster;
+            this.builder = AlgFactories.LOGICAL_BUILDER.create( cluster, algOptSchema );
         }
 
 
         @Override
-        public Object visitInputRef( RexInputRef inputRef ) {
-            return super.visitInputRef( inputRef );
+        public AlgNode visit( TableScan scan ) {
+            if ( algOptSchema == null ) {
+                this.algOptSchema = scan.getTable().getRelOptSchema();
+                this.builder = AlgFactories.LOGICAL_BUILDER.create( cluster, algOptSchema );
+            }
+            builder.scan( scan.getTable().getQualifiedName().get( scan.getTable().getQualifiedName().size() - 1 ).split( "_" )[0] );
+            return scan;
+        }
+
+
+        @Override
+        public AlgNode visit( AlgNode other ) {
+            if ( other instanceof Filter ) {
+                other.getInput( 0 ).accept( this );
+                builder.filter( ((Filter) other).getCondition() );
+            } else if ( other instanceof Project ) {
+                other.getInput( 0 ).accept( this );
+                builder.project( ((Project) other).getProjects() );
+            } else if ( other instanceof Values ) {
+                builder.valuesRows( other.getRowType(), ((Values) other).getTuples() );
+            } else if ( other instanceof Join ) {
+                other.getInput( 0 ).accept( this );
+                AlgNode left = builder.build();
+                other.getInput( 1 ).accept( this );
+                AlgNode right = builder.build();
+                builder.push( left );
+                builder.push( right );
+
+                builder.join( ((Join) other).getJoinType(), ((Join) other).getCondition() );
+            } else if ( other instanceof Calc ) {
+                RexProgram program = ((Calc) other).getProgram();
+                other.getInput( 0 ).accept( this );
+                RexLocalRef condition = program.getCondition();
+                if ( condition != null ) {
+                    builder.filter( program.expandLocalRef( condition ) );
+                }
+                Permutation permutation = program.getPermutation();
+                if ( permutation != null ) {
+                    builder.permute( permutation.inverse() );
+                }
+            } else {
+                if ( other.getInputs().size() > 0 ) {
+                    other.getInput( 0 ).accept( this );
+                }
+            }
+            return other;
         }
 
     }

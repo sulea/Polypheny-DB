@@ -82,10 +82,6 @@ public abstract class AbstractAlgNode implements AlgNode {
 
     private static final Logger LOGGER = PolyphenyDbTrace.getPlannerTracer();
 
-    @Getter
-    @Setter
-    private transient AlgNode originalNode;
-
 
     /**
      * Description, consists of id plus digest.

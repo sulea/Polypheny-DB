@@ -356,8 +356,15 @@ public class Functions {
         boolean transformToValues = true;
 
         List<Object[]> receivedValues = new ArrayList<>();
-        for ( Object[] objects : baz ) {
-            receivedValues.add( objects );
+        boolean isMultiple = false;
+        for ( Object objects : baz ) {
+            if ( isMultiple || objects instanceof Object[] ) {
+                receivedValues.add( (Object[]) objects );
+                isMultiple = true;
+            } else {
+                receivedValues.add( new Object[]{ objects } );
+            }
+
         }
         AlgBuilder builder = AlgBuilder.create( context.getStatement() );
         RexBuilder rexBuilder = builder.getRexBuilder();
@@ -400,29 +407,32 @@ public class Functions {
                 nodes.add( ands.get( 0 ) );
             }
         }
-        AlgNode prepared;
-        if ( nodes.size() > 1 ) {
-            prepared = builder.filter( rexBuilder.makeCall( OperatorRegistry.get( OperatorName.OR ), nodes ) ).build();
-        } else if ( nodes.size() == 1 ) {
-            prepared = builder.filter( nodes.get( 0 ) ).build();
-        } else {
-            // there seems to be nothing in the pre-routed side, maybe we use an empty values?
-            prepared = executedRight ? join.getLeft() : join.getRight();
-        }
-        if ( !transformToValues ) {
-            builder.push( executedRight ? prepared : join.getLeft() );
-            builder.push( executedRight ? join.getRight() : prepared );
-            builder.join( join.getJoinType(), join.getCondition() );
-        } else {
-            builder.values( executedRight ? join.getRight().getRowType() : join.getLeft().getRowType(), receivedValues );
 
-            AlgNode values = builder.build();
-            builder.push( executedRight ? prepared : values );
-            builder.push( executedRight ? values : prepared );
-            builder.join( join.getJoinType(), join.getCondition() );
+        builder.push( executedRight ? join.getLeft() : join.getRight() );
+        if ( nodes.size() > 1 ) {
+            builder.filter( rexBuilder.makeCall( OperatorRegistry.get( OperatorName.OR ), nodes ) );
+        } else if ( nodes.size() == 1 ) {
+            builder.filter( nodes.get( 0 ) );
         }
+        // there seems to be nothing in the pre-routed side, maybe we use an empty values?
+        AlgNode left;
+        AlgNode right;
+        AlgNode prepared = builder.build();
+        if ( !transformToValues ) {
+            left = executedRight ? prepared : join.getLeft();
+            right = executedRight ? join.getRight() : prepared;
+        } else {
+            AlgNode values = builder.valuesRows( executedRight ? join.getRight().getRowType() : join.getLeft().getRowType(), receivedValues ).build();
+
+            left = executedRight ? prepared : values;
+            right = executedRight ? values : prepared;
+        }
+        builder.push( left );
+        builder.push( right );
+        builder.join( join.getJoinType(), join.getCondition() );
 
         AlgNode build = builder.build();
+        build.getRowType();
 
         PolyResult result = context
                 .getStatement()
