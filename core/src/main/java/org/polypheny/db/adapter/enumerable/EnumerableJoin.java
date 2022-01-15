@@ -39,6 +39,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.apache.calcite.linq4j.tree.BlockBuilder;
 import org.apache.calcite.linq4j.tree.Expression;
 import org.apache.calcite.linq4j.tree.Expressions;
@@ -76,7 +77,7 @@ import org.polypheny.db.serialize.Serializer;
 import org.polypheny.db.tools.AlgBuilder;
 import org.polypheny.db.util.BuiltInMethod;
 import org.polypheny.db.util.ImmutableIntList;
-import org.polypheny.db.util.Permutation;
+import org.polypheny.db.util.Pair;
 import org.polypheny.db.util.Util;
 
 
@@ -321,10 +322,19 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
                 if ( condition != null ) {
                     builder.filter( program.expandLocalRef( condition ) );
                 }
-                Permutation permutation = program.getPermutation();
-                if ( permutation != null ) {
-                    builder.permute( permutation.inverse() );
+
+                if ( program.isPermutation() ) {
+                    builder.permute( program.getPermutation().inverse() );
                 }
+
+                List<Pair<RexLocalRef, String>> namedProjects = program.getNamedProjects();
+                List<RexLocalRef> projects = program.getProjectList();
+                if ( !program.isPermutation() && condition == null && !namedProjects.isEmpty() ) {
+                    builder.project(
+                            Pair.left( namedProjects ).stream().map( program::expandLocalRef ).collect( Collectors.toList() ),
+                            Pair.right( namedProjects ) );
+                }
+
             } else {
                 if ( other.getInputs().size() > 0 ) {
                     other.getInput( 0 ).accept( this );

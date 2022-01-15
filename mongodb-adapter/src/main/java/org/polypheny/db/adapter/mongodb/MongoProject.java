@@ -112,7 +112,7 @@ public class MongoProject extends Project implements MongoAlg {
                     : MongoRules.maybeFix( pair.right );
 
             if ( pair.left.getKind() == Kind.DISTANCE ) {
-                documents.put( pair.right, BsonFunctionHelper.getFunction( (RexCall) pair.left, mongoRowType, implementor ) );
+                documents.put( name, BsonFunctionHelper.getFunction( (RexCall) pair.left, mongoRowType, implementor ) );
                 continue;
             }
 

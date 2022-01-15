@@ -25,7 +25,6 @@ import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.polypheny.db.AdapterTestSuite;
@@ -46,6 +45,7 @@ public class JoinTest {
         //noinspection ResultOfMethodCallIgnored
         TestHelper.getInstance();
         addTestData();
+        addComplexTestData();
     }
 
 
@@ -76,19 +76,52 @@ public class JoinTest {
     }
 
 
+    private static void addComplexTestData() throws SQLException {
+        try ( JdbcConnection jdbcConnection = new JdbcConnection( false ) ) {
+            Connection connection = jdbcConnection.getConnection();
+            try ( Statement statement = connection.createStatement() ) {
+                statement.executeUpdate( "CREATE SCHEMA cineast" );
+
+                statement.executeUpdate( "CREATE TABLE cineast.features_averagecolor (id INTEGER NOT NULL, feature FLOAT ARRAY(1,3), PRIMARY KEY (id))" );
+                statement.executeUpdate( "CREATE TABLE cineast.cineast_segment (id INTEGER NOT NULL, segmentid INTEGER, objectid INTEGER, PRIMARY KEY (id))" );
+                statement.executeUpdate( "CREATE TABLE cineast.cineast_multimediaobject (objectid INTEGER NOT NULL, PRIMARY KEY (objectid))" );
+
+                statement.executeUpdate( "INSERT INTO cineast.features_averagecolor VALUES (1, ARRAY[0, 0, 0])" );
+                statement.executeUpdate( "INSERT INTO cineast.cineast_segment VALUES (1, 1, 1)" );
+                statement.executeUpdate( "INSERT INTO cineast.cineast_multimediaobject VALUES (1)" );
+                connection.commit();
+            }
+        }
+    }
+
+
     @AfterClass
     public static void stop() throws SQLException {
         try ( JdbcConnection jdbcConnection = new JdbcConnection( false ) ) {
             Connection connection = jdbcConnection.getConnection();
             try ( Statement statement = connection.createStatement() ) {
-                statement.executeUpdate( "DROP TABLE TableA" );
-                statement.executeUpdate( "DROP TABLE TableB" );
-                statement.executeUpdate( "DROP TABLE TableC" );
-                statement.executeUpdate( "DROP TABLE joinTest.Table_C" );
-                statement.executeUpdate( "DROP SCHEMA joinTest" );
+                dropTestData( statement );
+                dropComplexData( statement );
             }
             connection.commit();
         }
+    }
+
+
+    private static void dropTestData( Statement statement ) throws SQLException {
+        statement.executeUpdate( "DROP TABLE TableA" );
+        statement.executeUpdate( "DROP TABLE TableB" );
+        statement.executeUpdate( "DROP TABLE TableC" );
+        statement.executeUpdate( "DROP TABLE joinTest.Table_C" );
+        statement.executeUpdate( "DROP SCHEMA joinTest" );
+    }
+
+
+    private static void dropComplexData( Statement statement ) throws SQLException {
+        statement.executeUpdate( "DROP TABLE cineast.features_averagecolor" );
+        statement.executeUpdate( "DROP TABLE cineast.cineast_segment" );
+        statement.executeUpdate( "DROP TABLE cineast.cineast_multimediaobject" );
+        statement.executeUpdate( "DROP SCHEMA cineast" );
     }
 
     // --------------- Tests ---------------
@@ -315,19 +348,16 @@ public class JoinTest {
 
 
     @Test
-    @Ignore
     public void complexJoinTests() throws SQLException {
         try ( TestHelper.JdbcConnection polyphenyDbConnection = new TestHelper.JdbcConnection( true ) ) {
             Connection connection = polyphenyDbConnection.getConnection();
             try ( Statement statement = connection.createStatement() ) {
                 List<Object[]> expectedResult = ImmutableList.of(
-                        new Object[]{ "Name1", "Ab", 10000 },
-                        new Object[]{ "Name2", "Bc", 5000 },
-                        new Object[]{ "Name3", "Cd", 7000 }
+                        new Object[]{ 1, 0.374165748, 1, 1, 1, 1 }
                 );
                 TestHelper.checkResultSet(
                         statement.executeQuery( "SELECT * FROM "
-                                + "(SELECT id, distance(feature, ARRAY[0.76694137,0.16232862,0.4724879], 'L2') as dist "
+                                + "(SELECT id, distance(feature, ARRAY[0.1,0.2,0.3], 'L2') as dist "
                                 + "FROM cineast.features_averagecolor ORDER BY dist ASC LIMIT 500) AS feature "
                                 + "INNER JOIN cineast.cineast_segment AS segment ON (feature.id = segment.segmentid) "
                                 + "INNER JOIN cineast.cineast_multimediaobject AS object ON (segment.objectid = object.objectid)" ),
