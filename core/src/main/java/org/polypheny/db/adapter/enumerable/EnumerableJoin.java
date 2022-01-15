@@ -65,6 +65,7 @@ import org.polypheny.db.algebra.core.Values;
 import org.polypheny.db.algebra.logical.LogicalSort;
 import org.polypheny.db.algebra.metadata.AlgMdCollation;
 import org.polypheny.db.algebra.metadata.AlgMetadataQuery;
+import org.polypheny.db.config.RuntimeConfig;
 import org.polypheny.db.plan.AlgOptCluster;
 import org.polypheny.db.plan.AlgOptCost;
 import org.polypheny.db.plan.AlgOptPlanner;
@@ -180,7 +181,7 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
 
     @Override
     public Result implement( EnumerableAlgImplementor implementor, Prefer pref ) {
-        if ( !(left instanceof Values || right instanceof Values) ) {
+        if ( !(left instanceof Values || right instanceof Values) && RuntimeConfig.PRE_EXECUTE_JOINS.getBoolean() ) {
             return getOptimizedResult( implementor, pref );
         } else {
             return getDefaultResult( implementor, pref );

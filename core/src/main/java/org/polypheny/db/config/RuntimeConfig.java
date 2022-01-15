@@ -313,6 +313,13 @@ public enum RuntimeConfig {
             ConfigType.BOOLEAN,
             "queryParameterizationGroup" ),
 
+    PRE_EXECUTE_JOINS(
+            "runtime/preExecuteJoins",
+            "Wheter joins should be pre-executed to generate a filter on top of the other side.",
+            true,
+            ConfigType.BOOLEAN,
+            "queryParameterizationGroup" ),
+
     PARAMETERIZE_INTERVALS(
             "runtime/parameterizeIntervals",
             "Whether intervals should be parameterized.",
