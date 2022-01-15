@@ -437,7 +437,7 @@ public class Functions {
                         true,
                         false );
 
-        List<List<Object>> res = result.getRows( context.getStatement(), -1 );
+        //List<List<Object>> res = result.getRows( context.getStatement(), -1 );
 
         return result.enumerable( context );
     }
