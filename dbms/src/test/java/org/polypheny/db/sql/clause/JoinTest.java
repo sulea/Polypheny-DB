@@ -82,7 +82,7 @@ public class JoinTest {
             try ( Statement statement = connection.createStatement() ) {
                 statement.executeUpdate( "CREATE SCHEMA cineast" );
 
-                statement.executeUpdate( "CREATE TABLE cineast.features_averagecolor (id INTEGER NOT NULL, feature FLOAT ARRAY(1,3), PRIMARY KEY (id))" );
+                statement.executeUpdate( "CREATE TABLE cineast.features_averagecolor (id INTEGER NOT NULL, feature DOUBLE ARRAY(1,3), PRIMARY KEY (id))" );
                 statement.executeUpdate( "CREATE TABLE cineast.cineast_segment (id INTEGER NOT NULL, segmentid INTEGER, objectid INTEGER, PRIMARY KEY (id))" );
                 statement.executeUpdate( "CREATE TABLE cineast.cineast_multimediaobject (objectid INTEGER NOT NULL, PRIMARY KEY (objectid))" );
 

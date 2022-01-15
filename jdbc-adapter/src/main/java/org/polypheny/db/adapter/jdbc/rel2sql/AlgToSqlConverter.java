@@ -351,6 +351,7 @@ public abstract class AlgToSqlConverter extends SqlImplementor implements Reflec
         SqlNode query;
         final boolean rename = stack.size() <= 1 || !(Iterables.get( stack, 1 ).r instanceof TableModify);
         final List<String> fieldNames = e.getRowType().getFieldNames();
+        final boolean childOfJoin = (Iterables.get( stack, 1 ).r instanceof Join);
         if ( !dialect.supportsAliasedValues() && rename ) {
             // Oracle does not support "AS t (c1, c2)". So instead of
             //   (VALUES (v0, v1), (v2, v3)) AS t (c0, c1)
@@ -402,6 +403,16 @@ public abstract class AlgToSqlConverter extends SqlImplementor implements Reflec
                     list.add( new SqlIdentifier( fieldName, POS ) );
                 }
                 query = (SqlNode) OperatorRegistry.get( OperatorName.AS ).createCall( POS, list );
+                if ( childOfJoin ) {
+                    // renamed VALUES in JOINs need to be wrapped
+                    // else the queries like below are generated wrong
+                    // WRONG:
+                    // ... INNER JOIN (VALUES (1)) as "t" ("name") as "t1" ON t1.[...
+                    // CORRECT:
+                    // ... INNER JOIN (( SELECT * FROM (VALUES (1)) as "t" ("name")) as "t1" ON t1.[...
+
+                    query = wrapSelect( query );
+                }
             }
         }
         return result( query, clauses, e, null );

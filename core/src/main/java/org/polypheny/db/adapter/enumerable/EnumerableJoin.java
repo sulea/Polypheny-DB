@@ -340,7 +340,6 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
                 }
 
                 List<Pair<RexLocalRef, String>> namedProjects = program.getNamedProjects();
-                List<RexLocalRef> projects = program.getProjectList();
                 if ( !program.isPermutation() && condition == null && !namedProjects.isEmpty() ) {
                     builder.project(
                             Pair.left( namedProjects ).stream().map( program::expandLocalRef ).collect( Collectors.toList() ),
