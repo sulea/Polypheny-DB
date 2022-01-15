@@ -219,6 +219,13 @@ public class MongoRules {
     }
 
 
+    public static String adjustName( String name ) {
+        return name.startsWith( "$" )
+                ? "_" + maybeFix( name.substring( 2 ) )
+                : maybeFix( name );
+    }
+
+
     /**
      * Translator from {@link RexNode} to strings in MongoDB's expression language.
      */

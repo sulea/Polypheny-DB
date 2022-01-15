@@ -87,6 +87,7 @@ public class MongoSort extends Sort implements MongoAlg {
                         fields.get( fieldCollation.getFieldIndex() ).getName();
                 String[] splits = name.split( "\\." );
                 name = splits[splits.length - 1];
+                name = MongoRules.adjustName( name );
                 keys.add( name + ": " + direction( fieldCollation ) );
                 if ( false ) {
                     // TODO: NULLS FIRST and NULLS LAST

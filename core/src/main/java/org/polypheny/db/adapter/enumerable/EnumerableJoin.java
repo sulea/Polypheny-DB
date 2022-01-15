@@ -59,8 +59,10 @@ import org.polypheny.db.algebra.core.Join;
 import org.polypheny.db.algebra.core.JoinAlgType;
 import org.polypheny.db.algebra.core.JoinInfo;
 import org.polypheny.db.algebra.core.Project;
+import org.polypheny.db.algebra.core.Sort;
 import org.polypheny.db.algebra.core.TableScan;
 import org.polypheny.db.algebra.core.Values;
+import org.polypheny.db.algebra.logical.LogicalSort;
 import org.polypheny.db.algebra.metadata.AlgMdCollation;
 import org.polypheny.db.algebra.metadata.AlgMetadataQuery;
 import org.polypheny.db.plan.AlgOptCluster;
@@ -306,6 +308,16 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
                 builder.project( ((Project) other).getProjects() );
             } else if ( other instanceof Values ) {
                 builder.valuesRows( other.getRowType(), ((Values) other).getTuples() );
+            } else if ( other instanceof EnumerableLimit ) {
+                other.getInput( 0 ).accept( this );
+                RexLiteral offset = ((RexLiteral) ((EnumerableLimit) other).offset);
+                RexLiteral fetch = ((RexLiteral) ((EnumerableLimit) other).fetch);
+                builder.limit(
+                        offset != null ? (int) (long) offset.getValueAs( Long.class ) : -1,
+                        fetch != null ? (int) (long) fetch.getValueAs( Long.class ) : -1 );
+            } else if ( other instanceof Sort ) {
+                other.getInput( 0 ).accept( this );
+                builder.push( LogicalSort.create( builder.build(), ((Sort) other).getCollation(), ((Sort) other).offset, ((Sort) other).fetch ) );
             } else if ( other instanceof Join ) {
                 other.getInput( 0 ).accept( this );
                 AlgNode left = builder.build();

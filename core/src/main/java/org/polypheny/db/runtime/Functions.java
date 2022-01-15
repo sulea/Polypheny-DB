@@ -139,6 +139,7 @@ import org.polypheny.db.algebra.type.AlgDataTypeSystem;
 import org.polypheny.db.interpreter.Row;
 import org.polypheny.db.languages.OperatorRegistry;
 import org.polypheny.db.plan.AlgOptCluster;
+import org.polypheny.db.plan.AlgTraitSet;
 import org.polypheny.db.rex.RexBuilder;
 import org.polypheny.db.rex.RexCall;
 import org.polypheny.db.rex.RexInputRef;
@@ -579,7 +580,12 @@ public class Functions {
 
 
         private void setCluster( AbstractAlgNode other, AlgOptCluster cluster ) {
-            other.setTraitSet( cluster.traitSet() );
+            if ( other.getTraitSet().size() > 2 ) {
+                throw new RuntimeException( "This TraitSet constellation was not considered." );
+            }
+            AlgTraitSet set = cluster.traitSet();
+            set = set.replace( 1, other.getTraitSet().get( 1 ) );
+            other.setTraitSet( set );
             other.setCluster( cluster );
         }
 
