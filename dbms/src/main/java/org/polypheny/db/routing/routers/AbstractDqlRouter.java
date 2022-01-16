@@ -28,7 +28,6 @@ import org.polypheny.db.algebra.AlgNode;
 import org.polypheny.db.algebra.AlgRoot;
 import org.polypheny.db.algebra.core.BatchIterator;
 import org.polypheny.db.algebra.core.ConditionalExecute;
-import org.polypheny.db.algebra.core.ConditionalTableModify;
 import org.polypheny.db.algebra.core.SetOp;
 import org.polypheny.db.algebra.core.Union;
 import org.polypheny.db.algebra.logical.LogicalTableModify;
@@ -115,8 +114,6 @@ public abstract class AbstractDqlRouter extends BaseRouter implements Router {
             throw new IllegalStateException( "Should never happen for DML" );
         } else if ( logicalRoot.alg instanceof ConditionalExecute ) {
             throw new IllegalStateException( "Should never happen for conditional executes" );
-        } else if ( logicalRoot.alg instanceof ConditionalTableModify ) {
-            throw new IllegalStateException( "Should never happen for conditional table modifies" );
         } else if ( logicalRoot.alg instanceof BatchIterator ) {
             throw new IllegalStateException( "Should never happen for Iterator" );
         } else {

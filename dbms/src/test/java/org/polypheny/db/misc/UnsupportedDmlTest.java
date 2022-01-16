@@ -23,7 +23,6 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Arrays;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.polypheny.db.AdapterTestSuite;
@@ -34,7 +33,8 @@ import org.polypheny.db.mql.MqlTestTemplate;
 import org.polypheny.db.webui.models.Result;
 
 @Category(AdapterTestSuite.class)
-public class ProviderTest extends MqlTestTemplate {
+public class UnsupportedDmlTest extends MqlTestTemplate {
+
     @Test
     public void ddlEnumerableTest() {
         insert( "{\"hi\":3,\"stock\":3}" );
@@ -44,7 +44,8 @@ public class ProviderTest extends MqlTestTemplate {
         System.out.println( Arrays.deepToString( res.getData() ) );
 
         assertTrue(
-                MongoConnection.checkResultSet( res,
+                MongoConnection.checkResultSet(
+                        res,
                         ImmutableList.of( new Object[]{ "id_", "{\"hi\":3,\"stock\":5}" } ) ) );
     }
 

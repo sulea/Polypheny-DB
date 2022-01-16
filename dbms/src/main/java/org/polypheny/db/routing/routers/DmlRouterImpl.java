@@ -34,13 +34,11 @@ import org.polypheny.db.algebra.AlgShuttleImpl;
 import org.polypheny.db.algebra.constant.Kind;
 import org.polypheny.db.algebra.core.BatchIterator;
 import org.polypheny.db.algebra.core.ConditionalExecute;
-import org.polypheny.db.algebra.core.ConditionalTableModify;
 import org.polypheny.db.algebra.core.ConstraintEnforcer;
 import org.polypheny.db.algebra.core.TableModify;
 import org.polypheny.db.algebra.core.TableModify.Operation;
 import org.polypheny.db.algebra.logical.LogicalBatchIterator;
 import org.polypheny.db.algebra.logical.LogicalConditionalExecute;
-import org.polypheny.db.algebra.logical.LogicalConditionalTableModify;
 import org.polypheny.db.algebra.logical.LogicalConstraintEnforcer;
 import org.polypheny.db.algebra.logical.LogicalDocuments;
 import org.polypheny.db.algebra.logical.LogicalFilter;
@@ -86,6 +84,8 @@ public class DmlRouterImpl extends BaseRouter implements DmlRouter {
 
     /**
      * Default implementation: Execute DML on all placements
+     *
+     * @return
      */
     @Override
     public AlgNode routeDml( AlgNode node, Statement statement ) {
@@ -713,31 +713,11 @@ public class DmlRouterImpl extends BaseRouter implements DmlRouter {
             action = handleConditionalExecute( lce.getRight(), statement, queryInformation );
         } else if ( lce.getRight() instanceof TableModify ) {
             action = routeDml( lce.getRight(), statement );
-        } else if ( lce.getRight() instanceof ConditionalTableModify ) {
-            action = handleConditionalTableModify( lce.getRight(), statement, queryInformation );
         } else {
             throw new IllegalArgumentException();
         }
 
         return LogicalConditionalExecute.create( builder.build(), action, lce );
-    }
-
-
-    @Override
-    public AlgNode handleConditionalTableModify( AlgNode alg, Statement statement, LogicalQueryInformation queryInformation ) {
-        LogicalConditionalTableModify lce = (LogicalConditionalTableModify) alg;
-        RoutedAlgBuilder builder = RoutedAlgBuilder.create( statement, alg.getCluster() );
-        builder = RoutingManager.getInstance().getFallbackRouter().routeFirst( lce.getQuery(), builder, statement, alg.getCluster(), queryInformation );
-
-        // todo dl catch partitioning for now this way
-        try {
-            return LogicalConditionalTableModify.create( routeDml( lce.getModify(), statement ), builder.build(), routeDml( lce.getPrepared(), statement ) );
-        } catch ( RuntimeException e ) {
-            builder.clear();
-            builder = RoutingManager.getInstance().getFallbackRouter().routeFirst( lce.getQuery(), builder, statement, alg.getCluster(), queryInformation );
-
-            return LogicalConditionalTableModify.create( lce.getModify(), builder.build(), routeDml( lce.getPrepared(), statement ) );
-        }
     }
 
 
@@ -774,8 +754,6 @@ public class DmlRouterImpl extends BaseRouter implements DmlRouter {
             input = routeDml( iterator.getInput(), statement );
         } else if ( iterator.getInput() instanceof ConditionalExecute ) {
             input = handleConditionalExecute( iterator.getInput(), statement, queryInformation );
-        } else if ( iterator.getInput() instanceof ConditionalTableModify ) {
-            input = handleConditionalTableModify( iterator.getInput(), statement, queryInformation );
         } else if ( iterator.getInput() instanceof ConstraintEnforcer ) {
             input = handleConstraintEnforcer( iterator.getInput(), statement, queryInformation );
         } else {

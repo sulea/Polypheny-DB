@@ -28,7 +28,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.polypheny.db.algebra.AlgNode;
 import org.polypheny.db.algebra.AlgShuttle;
 import org.polypheny.db.algebra.core.BatchIterator;
-import org.polypheny.db.algebra.core.ConditionalTableModify;
 import org.polypheny.db.algebra.core.ConstraintEnforcer;
 import org.polypheny.db.algebra.core.JoinAlgType;
 import org.polypheny.db.algebra.core.TableModify;
@@ -91,8 +90,6 @@ public class LogicalConstraintEnforcer extends ConstraintEnforcer {
         } else if ( node instanceof BatchIterator ) {
             if ( node.getInput( 0 ) instanceof TableModify ) {
                 modify = (TableModify) node.getInput( 0 );
-            } else if ( node.getInput( 0 ) instanceof ConditionalTableModify ) {
-                modify = (TableModify) ((ConditionalTableModify) node.getInput( 0 )).getModify();
             } else {
                 throw new RuntimeException( "The tree did no conform, while generating the constraint enforcement query!" );
             }

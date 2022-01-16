@@ -29,16 +29,12 @@ import org.polypheny.db.algebra.AlgRoot;
 import org.polypheny.db.algebra.AlgShuttleImpl;
 import org.polypheny.db.algebra.constant.Kind;
 import org.polypheny.db.algebra.core.BatchIterator;
-import org.polypheny.db.algebra.core.ConditionalTableModify;
 import org.polypheny.db.algebra.core.JoinAlgType;
 import org.polypheny.db.algebra.core.TableModify;
 import org.polypheny.db.algebra.logical.LogicalBatchIterator;
-import org.polypheny.db.algebra.logical.LogicalConditionalExecute;
-import org.polypheny.db.algebra.logical.LogicalConditionalTableModify;
 import org.polypheny.db.algebra.logical.LogicalConstraintEnforcer;
 import org.polypheny.db.algebra.logical.LogicalConstraintEnforcer.EnforcementInformation;
 import org.polypheny.db.algebra.logical.LogicalJoin;
-import org.polypheny.db.algebra.logical.LogicalTableModify;
 import org.polypheny.db.algebra.operators.OperatorName;
 import org.polypheny.db.catalog.Catalog;
 import org.polypheny.db.catalog.Catalog.TableType;
@@ -63,17 +59,6 @@ import org.polypheny.db.transaction.TransactionException;
 import org.polypheny.db.transaction.TransactionManager;
 
 public class EnumerableAdjuster {
-
-    // todo dl use shuttle to get all included TableModifies...
-    public static AlgRoot adjustModify( AlgRoot root, Statement statement ) {
-        if ( root.alg instanceof TableModify ) {
-            return AlgRoot.of( LogicalConditionalTableModify.create( (LogicalTableModify) root.alg, statement ), Kind.UPDATE );
-        } else {
-            ModifyAdjuster adjuster = new ModifyAdjuster( statement );
-            root.alg.accept( adjuster );
-            return root;
-        }
-    }
 
 
     public static AlgRoot adjustBatch( AlgRoot root, Statement statement ) {
@@ -115,8 +100,6 @@ public class EnumerableAdjuster {
         } else if ( node instanceof BatchIterator ) {
             if ( node.getInput( 0 ) instanceof TableModify ) {
                 modify = (TableModify) node.getInput( 0 );
-            } else if ( node.getInput( 0 ) instanceof ConditionalTableModify ) {
-                modify = (TableModify) ((ConditionalTableModify) node.getInput( 0 )).getModify();
             } else {
                 throw new RuntimeException( "The tree did no conform, while generating the constraint enforcement query!" );
             }
@@ -134,30 +117,6 @@ public class EnumerableAdjuster {
                 .map( t -> LogicalConstraintEnforcer.getControl( t, statement ) )
                 .filter( i -> i.getControl() != null )
                 .collect( Collectors.toList() );
-    }
-
-
-    private static class ModifyAdjuster extends AlgShuttleImpl {
-
-        private final Statement statement;
-
-
-        private ModifyAdjuster( Statement statement ) {
-            this.statement = statement;
-        }
-
-
-        @Override
-        public AlgNode visit( LogicalConditionalExecute lce ) {
-            if ( lce.getRight() instanceof TableModify ) {
-                AlgNode ctm = LogicalConditionalTableModify.create( (LogicalTableModify) lce.getRight(), statement );
-                lce.replaceInput( 1, ctm );
-                return lce;
-            } else {
-                return lce.getRight().accept( this );
-            }
-        }
-
     }
 
 

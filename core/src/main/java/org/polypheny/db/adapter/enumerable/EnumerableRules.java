@@ -68,7 +68,9 @@ public class EnumerableRules {
 
     public static final EnumerableConditionalExecuteFalseRule ENUMERABLE_CONDITIONAL_EXECUTE_FALSE_RULE = new EnumerableConditionalExecuteFalseRule();
 
-    public static final EnumerableConditionalTableModifyRule ENUMERABLE_CONDITIONAL_TABLE_MODIFY_RULE = new EnumerableConditionalTableModifyRule();
+    public static final EnumerableStreamerRule ENUMERABLE_STREAMER_RULE = new EnumerableStreamerRule();
+
+    public static final EnumerableTableModifyToStreamerRule ENUMERABLE_TABLE_MODIFY_TO_STREAMER_RULE = new EnumerableTableModifyToStreamerRule();
 
     public static final EnumerableBatchIteratorRule ENUMERABLE_BATCH_ITERATOR_RULE = new EnumerableBatchIteratorRule();
 

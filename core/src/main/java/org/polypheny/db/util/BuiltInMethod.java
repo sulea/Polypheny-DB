@@ -138,9 +138,8 @@ import org.polypheny.db.type.PolyType;
  */
 public enum BuiltInMethod {
     ROUTE_JOIN_FILTER( Functions.class, "routeJoinFilter", DataContext.class, Enumerable.class, byte[].class, PRE_ROUTE.class ),
-    STREAM( Functions.class, "stream", DataContext.class, Enumerable.class, List.class ),
     BATCH( Functions.class, "batch", DataContext.class, Enumerable.class ),
-    INTO_CONTEXT( Functions.class, "intoContext", DataContext.class, Enumerable.class, List.class ),
+    STREAM_RIGHT( Functions.class, "streamRight", DataContext.class, Enumerable.class, List.class ),
     ENFORCE_CONSTRAINT( Functions.class, "enforceConstraint", Enumerable.class, Enumerable.class, List.class, List.class ),
     PARSE_ARRAY_FROM_TEXT( Functions.class, "reparse", PolyType.class, Long.class, String.class ),
     QUERYABLE_SELECT( Queryable.class, "select", FunctionExpression.class ),

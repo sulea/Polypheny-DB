@@ -27,6 +27,8 @@ public interface DmlRouter {
 
     /**
      * Routes DML queries and returns a RelNode.
+     *
+     * @return
      */
     AlgNode routeDml( AlgNode node, Statement statement );
 
@@ -34,8 +36,6 @@ public interface DmlRouter {
      * Routes conditional executes and directly returns a RelNode.
      */
     AlgNode handleConditionalExecute( AlgNode node, Statement statement, LogicalQueryInformation queryInformation );
-
-    AlgNode handleConditionalTableModify( AlgNode alg, Statement statement, LogicalQueryInformation queryInformation );
 
     AlgNode handleConstraintEnforcer( AlgNode alg, Statement statement, LogicalQueryInformation queryInformation );
 

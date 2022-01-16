@@ -398,7 +398,8 @@ public class LanguageCrud {
 
 
     private static void attachError( Transaction transaction, List<Result> results, String query, Throwable t ) {
-        Result result = new Result( t.getCause().getMessage() ).setGeneratedQuery( query ).setXid( transaction.getXid().toString() );
+        String msg = t.getCause() == null ? null : t.getCause().getMessage();
+        Result result = new Result( msg ).setGeneratedQuery( query ).setXid( transaction.getXid().toString() );
         results.add( result );
     }
 

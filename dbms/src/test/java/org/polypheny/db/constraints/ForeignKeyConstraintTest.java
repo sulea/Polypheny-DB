@@ -201,7 +201,7 @@ public class ForeignKeyConstraintTest {
 
 
     @Test
-    //@Ignore // todo dl enable as soon as such inserts work correctly
+    @Ignore // todo dl enable as soon as such inserts work correctly
     public void testInsertSelectNoConflict() throws SQLException {
         try ( JdbcConnection polyphenyDbConnection = new JdbcConnection( true ) ) {
             Connection connection = polyphenyDbConnection.getConnection();

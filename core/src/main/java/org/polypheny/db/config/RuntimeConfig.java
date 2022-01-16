@@ -315,7 +315,7 @@ public enum RuntimeConfig {
 
     PRE_EXECUTE_JOINS(
             "runtime/preExecuteJoins",
-            "Wheter joins should be pre-executed to generate a filter on top of the other side.",
+            "Whether joins should be pre-executed to generate a filter on top of the other side.",
             true,
             ConfigType.BOOLEAN,
             "queryParameterizationGroup" ),

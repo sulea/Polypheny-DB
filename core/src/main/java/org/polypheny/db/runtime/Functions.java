@@ -120,7 +120,6 @@ import org.polypheny.db.algebra.json.JsonQueryWrapperBehavior;
 import org.polypheny.db.algebra.json.JsonValueEmptyOrErrorBehavior;
 import org.polypheny.db.algebra.logical.LogicalAggregate;
 import org.polypheny.db.algebra.logical.LogicalConditionalExecute;
-import org.polypheny.db.algebra.logical.LogicalConditionalTableModify;
 import org.polypheny.db.algebra.logical.LogicalConstraintEnforcer;
 import org.polypheny.db.algebra.logical.LogicalCorrelate;
 import org.polypheny.db.algebra.logical.LogicalExchange;
@@ -337,19 +336,6 @@ public class Functions {
     }
 
 
-    public static void stream( final DataContext context, final Enumerable<Object[]> provider, final List<String> types ) {
-        List<PolyType> polyTypes = types.stream().map( PolyType::valueOf ).collect( Collectors.toList() );
-        PolyTypeFactoryImpl factory = new PolyTypeFactoryImpl( AlgDataTypeSystem.DEFAULT );
-        List<AlgDataType> algDataTypes = polyTypes.stream().map( factory::createPolyType ).collect( Collectors.toList() );
-
-        List<Object[]> values = new ArrayList<>();
-        for ( Object[] o : provider ) {
-            values.add( o );
-        }
-
-    }
-
-
     @SuppressWarnings("unused")
     public static Enumerable<?> routeJoinFilter( final DataContext context, final Enumerable<Object[]> baz, byte[] other, PRE_ROUTE preRoute ) {
         LogicalJoin join = Serializer.asDecompressedObject( other, LogicalJoin.class );
@@ -559,13 +545,6 @@ public class Functions {
 
 
         @Override
-        public AlgNode visit( LogicalConditionalTableModify conditionalModify ) {
-            setCluster( conditionalModify, cluster );
-            return super.visit( conditionalModify );
-        }
-
-
-        @Override
         public AlgNode visit( LogicalConstraintEnforcer enforcer ) {
             setCluster( enforcer, cluster );
             return super.visit( enforcer );
@@ -673,7 +652,7 @@ public class Functions {
 
 
     @SuppressWarnings("unused")
-    public static void intoContext( final DataContext context, final Enumerable<Object[]> baz, final List<String> types ) {
+    public static void streamRight( final DataContext context, final Enumerable<Object[]> baz, final List<String> types ) {
 
         List<PolyType> polyTypes = types.stream().map( PolyType::valueOf ).collect( Collectors.toList() );
         PolyTypeFactoryImpl factory = new PolyTypeFactoryImpl( AlgDataTypeSystem.DEFAULT );

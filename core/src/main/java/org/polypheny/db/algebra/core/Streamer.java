@@ -18,12 +18,14 @@ package org.polypheny.db.algebra.core;
 
 import lombok.extern.slf4j.Slf4j;
 import org.polypheny.db.algebra.AlgNode;
+import org.polypheny.db.algebra.AlgVisitor;
 import org.polypheny.db.algebra.BiAlg;
+import org.polypheny.db.algebra.type.AlgDataType;
 import org.polypheny.db.plan.AlgOptCluster;
 import org.polypheny.db.plan.AlgTraitSet;
 
 @Slf4j
-public class Streamer extends BiAlg {
+public abstract class Streamer extends BiAlg {
 
     /**
      * {@code
@@ -40,9 +42,21 @@ public class Streamer extends BiAlg {
      */
     public Streamer( AlgOptCluster cluster, AlgTraitSet traitSet, AlgNode provider, AlgNode collector ) {
         super( cluster, traitSet, provider, collector );
-        if ( provider.getRowType().getFieldCount() != collector.getRowType().getFieldCount() ) {
+        /*if ( provider.getRowType().getFieldCount() != collector.getRowType().getFieldCount() ) {
             throw new RuntimeException( "The provided provider and collectors do not match." );
-        }
+        }*/
+    }
+
+
+    @Override
+    public void childrenAccept( AlgVisitor visitor ) {
+        visitor.visit( left, 0, this );
+    }
+
+
+    @Override
+    protected AlgDataType deriveRowType() {
+        return right.getRowType();
     }
 
 
@@ -58,7 +72,7 @@ public class Streamer extends BiAlg {
 
     @Override
     public String algCompareString() {
-        return "$Streamer:[$" +
+        return "$streamer:[$" +
                 getProvider().algCompareString() +
                 ",$" + getCollector().algCompareString() +
                 "]";

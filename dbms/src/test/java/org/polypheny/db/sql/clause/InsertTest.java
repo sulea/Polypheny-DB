@@ -22,6 +22,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.polypheny.db.TestHelper;
 import org.polypheny.db.TestHelper.JdbcConnection;
@@ -41,24 +42,23 @@ public class InsertTest {
         // Ensures that Polypheny-DB is running
         //noinspection ResultOfMethodCallIgnored
         TestHelper.getInstance();
-    }
-
-
-    @AfterClass
-    public static void stop() throws SQLException {
-    }
-
-
-    private void enableConstraints() throws SQLException {
-        //noinspection ResultOfMethodCallIgnored
-        TestHelper.getInstance();
         try ( JdbcConnection polyphenyDbConnection = new JdbcConnection( true ) ) {
             Connection connection = polyphenyDbConnection.getConnection();
             try ( Statement statement = connection.createStatement() ) {
                 // Create schema
                 statement.executeUpdate( "ALTER CONFIG 'runtime/uniqueConstraintEnforcement' SET true" );
-                //statement.executeUpdate( "ALTER CONFIG 'runtime/foreignKeyEnforcement' SET true" );
-                //statement.executeUpdate( "ALTER CONFIG 'runtime/polystoreIndexesSimplify' SET true" );
+            }
+        }
+    }
+
+
+    @AfterClass
+    public static void shutdown() throws SQLException {
+        try ( JdbcConnection polyphenyDbConnection = new JdbcConnection( true ) ) {
+            Connection connection = polyphenyDbConnection.getConnection();
+            try ( Statement statement = connection.createStatement() ) {
+                // Create schema
+                statement.executeUpdate( "ALTER CONFIG 'runtime/uniqueConstraintEnforcement' SET false" );
             }
         }
     }
@@ -66,7 +66,6 @@ public class InsertTest {
 
     @Test
     public void chainedSingleInsertTest() throws SQLException {
-        enableConstraints();
         try ( JdbcConnection polyphenyDbConnection = new JdbcConnection( true ) ) {
             Connection connection = polyphenyDbConnection.getConnection();
             try ( Statement statement = connection.createStatement() ) {
@@ -90,8 +89,8 @@ public class InsertTest {
 
 
     @Test
+    @Ignore
     public void chainedMultipleInsertTest() throws SQLException {
-        enableConstraints();
         try ( JdbcConnection polyphenyDbConnection = new JdbcConnection( true ) ) {
             Connection connection = polyphenyDbConnection.getConnection();
             try ( Statement statement = connection.createStatement() ) {
@@ -108,8 +107,6 @@ public class InsertTest {
                     statement.executeUpdate( "DROP TABLE insert_test" );
                 }
             }
-
-
         }
     }
 

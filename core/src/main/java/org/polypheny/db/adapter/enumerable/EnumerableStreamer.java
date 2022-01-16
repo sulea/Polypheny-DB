@@ -16,14 +16,18 @@
 
 package org.polypheny.db.adapter.enumerable;
 
+import java.util.List;
 import java.util.stream.Collectors;
 import org.apache.calcite.linq4j.tree.BlockBuilder;
-import org.apache.calcite.linq4j.tree.Expression;
 import org.apache.calcite.linq4j.tree.Expressions;
+import org.apache.calcite.linq4j.tree.MethodCallExpression;
 import org.polypheny.db.adapter.DataContext;
 import org.polypheny.db.algebra.AlgNode;
 import org.polypheny.db.algebra.core.Streamer;
+import org.polypheny.db.algebra.metadata.AlgMetadataQuery;
 import org.polypheny.db.plan.AlgOptCluster;
+import org.polypheny.db.plan.AlgOptCost;
+import org.polypheny.db.plan.AlgOptPlanner;
 import org.polypheny.db.plan.AlgTraitSet;
 import org.polypheny.db.util.BuiltInMethod;
 
@@ -47,28 +51,40 @@ public class EnumerableStreamer extends Streamer implements EnumerableAlg {
     }
 
 
+    public static EnumerableStreamer create( AlgNode query, AlgNode prepared ) {
+        return new EnumerableStreamer( query.getCluster(), query.getTraitSet(), query, prepared );
+    }
+
+
+    @Override
+    public AlgOptCost computeSelfCost( AlgOptPlanner planner, AlgMetadataQuery mq ) {
+        return right.computeSelfCost( planner, mq );//.plus( right.computeSelfCost( planner, mq ) );
+    }
+
+
     @Override
     public Result implement( EnumerableAlgImplementor implementor, Prefer pref ) {
         final BlockBuilder builder = new BlockBuilder();
+        final Result query = implementor.visitChild( this, 0, (EnumerableAlg) getLeft(), pref );
 
-        final Result providerResult = implementor.visitChild( this, 0, (EnumerableAlg) getProvider(), pref );
-        final Result collectorResult = implementor.visitChild( this, 1, (EnumerableAlg) getCollector(), pref );
+        MethodCallExpression transformContext = Expressions.call(
+                BuiltInMethod.STREAM_RIGHT.method,
+                Expressions.constant( DataContext.ROOT ),
+                builder.append( builder.newName( "provider" + System.nanoTime() ), query.block ),
+                Expressions.constant( getLeft().getRowType().getFieldList().stream().map( f -> f.getType().getPolyType().name() ).collect( Collectors.toList() ) ) );
 
-        Expression providerExp = builder.append( "provider_" + System.nanoTime(), providerResult.block );
-        Expression collectorExp = builder.append( "collector_" + System.nanoTime(), collectorResult.block );
+        final Result prepared = implementor.visitChild( this, 1, (EnumerableAlg) getRight(), pref );
 
-        Expression types = Expressions.constant( getCollector().getRowType().getFieldList().stream().map( f -> f.getType().getPolyType().name() ).collect( Collectors.toList() ) );
+        builder.add( Expressions.statement( transformContext ) );
+        builder.add( Expressions.return_( null, builder.append( "test", prepared.block ) ) );
 
-        Expression result = Expressions.call( BuiltInMethod.STREAM.method, Expressions.constant( DataContext.ROOT ), providerExp, types );
-        builder.add( result );
-        builder.add( Expressions.return_( null, builder.append( "collector_" + System.nanoTime(), collectorExp ) ) );
+        return implementor.result( prepared.physType, builder.toBlock() );
+    }
 
-        final PhysType physType =
-                PhysTypeImpl.of(
-                        implementor.getTypeFactory(),
-                        getRowType(),
-                        pref.prefer( JavaRowFormat.CUSTOM ) );
-        return implementor.result( physType, builder.toBlock() );
+
+    @Override
+    public AlgNode copy( AlgTraitSet traitSet, List<AlgNode> inputs ) {
+        return new EnumerableStreamer( inputs.get( 0 ).getCluster(), traitSet, inputs.get( 0 ), inputs.get( 1 ) );
     }
 
 }

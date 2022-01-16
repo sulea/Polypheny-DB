@@ -41,7 +41,6 @@ import org.polypheny.db.algebra.logical.LogicalAggregate;
 import org.polypheny.db.algebra.logical.LogicalBatchIterator;
 import org.polypheny.db.algebra.logical.LogicalCalc;
 import org.polypheny.db.algebra.logical.LogicalConditionalExecute;
-import org.polypheny.db.algebra.logical.LogicalConditionalTableModify;
 import org.polypheny.db.algebra.logical.LogicalConstraintEnforcer;
 import org.polypheny.db.algebra.logical.LogicalCorrelate;
 import org.polypheny.db.algebra.logical.LogicalFilter;
@@ -52,6 +51,7 @@ import org.polypheny.db.algebra.logical.LogicalMinus;
 import org.polypheny.db.algebra.logical.LogicalModifyCollect;
 import org.polypheny.db.algebra.logical.LogicalProject;
 import org.polypheny.db.algebra.logical.LogicalSort;
+import org.polypheny.db.algebra.logical.LogicalStreamer;
 import org.polypheny.db.algebra.logical.LogicalTableFunctionScan;
 import org.polypheny.db.algebra.logical.LogicalTableModify;
 import org.polypheny.db.algebra.logical.LogicalUnion;
@@ -341,8 +341,8 @@ public class AlgStructuredTypeFlattener implements ReflectiveVisitor {
     }
 
 
-    public void rewriteAlg( LogicalConditionalTableModify alg ) {
-        LogicalConditionalTableModify newAlg = LogicalConditionalTableModify.create( alg.getModify(), alg.getQuery(), alg.getPrepared() );
+    public void rewriteAlg( LogicalStreamer alg ) {
+        LogicalStreamer newAlg = LogicalStreamer.create( alg.getLeft(), alg.getRight() );
         setNewForOldRel( alg, newAlg );
     }
 

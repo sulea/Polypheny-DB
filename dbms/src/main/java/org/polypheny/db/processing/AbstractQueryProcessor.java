@@ -62,7 +62,6 @@ import org.polypheny.db.algebra.constant.Kind;
 import org.polypheny.db.algebra.core.BatchIterator;
 import org.polypheny.db.algebra.core.ConditionalExecute;
 import org.polypheny.db.algebra.core.ConditionalExecute.Condition;
-import org.polypheny.db.algebra.core.ConditionalTableModify;
 import org.polypheny.db.algebra.core.ConstraintEnforcer;
 import org.polypheny.db.algebra.core.Sort;
 import org.polypheny.db.algebra.core.Values;
@@ -361,7 +360,7 @@ public abstract class AbstractQueryProcessor implements QueryProcessor, Executio
             //constraintsRoot = EnumerableAdjuster.prepareJoins( constraintsRoot, statement, this );
 
             if ( constraintsRoot.kind == Kind.UPDATE && EnumerableAdjuster.needsAdjustment( constraintsRoot.alg ) ) {
-                constraintsRoot = EnumerableAdjuster.adjustModify( constraintsRoot, statement );
+                //constraintsRoot = EnumerableAdjuster.adjustModify( constraintsRoot, statement );
             }
 
             if ( constraintsRoot.kind == Kind.UPDATE || constraintsRoot.kind == Kind.INSERT ) {
@@ -538,7 +537,6 @@ public abstract class AbstractQueryProcessor implements QueryProcessor, Executio
             statement.getProcessingDuration().stop( "Planning & Optimization" );
             statement.getProcessingDuration().start( "Implementation" );
         }
-
 
         for ( int i = 0; i < optimalNodeList.size(); i++ ) {
             if ( results.get( i ) != null ) {
@@ -1002,9 +1000,6 @@ public abstract class AbstractQueryProcessor implements QueryProcessor, Executio
         } else if ( logicalRoot.alg instanceof ConditionalExecute ) {
             AlgNode routedConditionalExecute = dmlRouter.handleConditionalExecute( logicalRoot.alg, statement, queryInformation );
             return Lists.newArrayList( new ProposedRoutingPlanImpl( routedConditionalExecute, logicalRoot, queryInformation.getQueryClass() ) );
-        } else if ( logicalRoot.alg instanceof ConditionalTableModify ) {
-            AlgNode routedConditionalTableModify = dmlRouter.handleConditionalTableModify( logicalRoot.alg, statement, queryInformation );
-            return Lists.newArrayList( new ProposedRoutingPlanImpl( routedConditionalTableModify, logicalRoot, queryInformation.getQueryClass() ) );
         } else if ( logicalRoot.alg instanceof BatchIterator ) {
             AlgNode routedIterator = dmlRouter.handleBatchIterator( logicalRoot.alg, statement, queryInformation );
             return Lists.newArrayList( new ProposedRoutingPlanImpl( routedIterator, logicalRoot, queryInformation.getQueryClass() ) );
