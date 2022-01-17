@@ -35,6 +35,7 @@ package org.polypheny.db.algebra.core;
 
 
 import com.google.common.collect.ImmutableList;
+import java.io.Serializable;
 import java.util.List;
 import java.util.Objects;
 import org.polypheny.db.algebra.AlgCollation;
@@ -52,7 +53,7 @@ import org.polypheny.db.util.mapping.Mappings;
 /**
  * Call to an aggregate function within an {@link org.polypheny.db.algebra.core.Aggregate}.
  */
-public class AggregateCall {
+public class AggregateCall implements Serializable {
 
     private final AggFunction aggFunction;
 

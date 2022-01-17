@@ -50,6 +50,7 @@ import org.polypheny.db.algebra.AlgNode;
 import org.polypheny.db.algebra.AlgNodes;
 import org.polypheny.db.algebra.AlgShuttleImpl;
 import org.polypheny.db.algebra.InvalidAlgException;
+import org.polypheny.db.algebra.core.Aggregate;
 import org.polypheny.db.algebra.core.AlgFactories;
 import org.polypheny.db.algebra.core.Calc;
 import org.polypheny.db.algebra.core.CorrelationId;
@@ -62,7 +63,9 @@ import org.polypheny.db.algebra.core.Project;
 import org.polypheny.db.algebra.core.Sort;
 import org.polypheny.db.algebra.core.TableScan;
 import org.polypheny.db.algebra.core.Values;
+import org.polypheny.db.algebra.logical.LogicalAggregate;
 import org.polypheny.db.algebra.logical.LogicalSort;
+import org.polypheny.db.algebra.logical.LogicalTableScan.DummyTableScan;
 import org.polypheny.db.algebra.metadata.AlgMdCollation;
 import org.polypheny.db.algebra.metadata.AlgMetadataQuery;
 import org.polypheny.db.config.RuntimeConfig;
@@ -181,7 +184,7 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
 
     @Override
     public Result implement( EnumerableAlgImplementor implementor, Prefer pref ) {
-        if ( !(left instanceof Values || right instanceof Values) && RuntimeConfig.PRE_EXECUTE_JOINS.getBoolean() ) {
+        if ( !getCluster().isJoinsOptimized() && !(left instanceof Values || right instanceof Values) && RuntimeConfig.PRE_EXECUTE_JOINS.getBoolean() ) {
             return getOptimizedResult( implementor, pref );
         } else {
             return getDefaultResult( implementor, pref );
@@ -281,7 +284,8 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
                 this.algOptSchema = scan.getTable().getRelOptSchema();
                 this.builder = AlgFactories.LOGICAL_BUILDER.create( cluster, algOptSchema );
             }
-            builder.scan( getLogicalTableName( scan.getTable() ) );
+            //builder.scan( getLogicalTableName( scan.getTable() ) );
+            builder.push( new DummyTableScan( cluster, scan.getRowType(), scan.getTable().getQualifiedName() ) );
             return scan;
         }
 
@@ -319,6 +323,16 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
             } else if ( other instanceof Sort ) {
                 other.getInput( 0 ).accept( this );
                 builder.push( LogicalSort.create( builder.build(), ((Sort) other).getCollation(), ((Sort) other).offset, ((Sort) other).fetch ) );
+            } else if ( other instanceof Aggregate ) {
+                other.getInput( 0 ).accept( this );
+                builder.push( new LogicalAggregate(
+                        cluster,
+                        cluster.traitSet(),
+                        builder.build(),
+                        ((Aggregate) other).indicator,
+                        ((Aggregate) other).getGroupSet(),
+                        ((Aggregate) other).getGroupSets(),
+                        ((Aggregate) other).getAggCallList() ) );
             } else if ( other instanceof Join ) {
                 other.getInput( 0 ).accept( this );
                 AlgNode left = builder.build();

@@ -457,6 +457,9 @@ public class AlgBuilder {
             return rexBuilder.makeExactLiteral( BigDecimal.valueOf( ((Number) value).longValue() ) );
         } else if ( value instanceof String ) {
             return rexBuilder.makeLiteral( (String) value );
+        } else if ( value instanceof byte[] ) {
+            // multimedia stream
+            return rexBuilder.makeFileLiteral( (byte[]) value );
         } else {
             throw new IllegalArgumentException( "cannot convert " + value + " (" + value.getClass() + ") to a constant" );
         }

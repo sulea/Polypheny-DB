@@ -248,7 +248,7 @@ public class BasicPolyType extends AbstractPolyType {
             sb.append( wrappedCharset.getCharset().name() );
             sb.append( "\"" );
         }
-        if ( collation != null && collation != Collation.IMPLICIT && collation != Collation.COERCIBLE ) {
+        if ( collation != null && !collation.equals( Collation.IMPLICIT ) && !collation.equals( Collation.COERCIBLE ) ) {
             sb.append( " COLLATE \"" );
             sb.append( collation.getCollationName() );
             sb.append( "\"" );

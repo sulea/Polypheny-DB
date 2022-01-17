@@ -130,6 +130,7 @@ import org.polypheny.db.algebra.logical.LogicalMatch;
 import org.polypheny.db.algebra.logical.LogicalMinus;
 import org.polypheny.db.algebra.logical.LogicalProject;
 import org.polypheny.db.algebra.logical.LogicalSort;
+import org.polypheny.db.algebra.logical.LogicalTableScan.DummyTableScan;
 import org.polypheny.db.algebra.logical.LogicalUnion;
 import org.polypheny.db.algebra.logical.LogicalValues;
 import org.polypheny.db.algebra.operators.OperatorName;
@@ -149,6 +150,7 @@ import org.polypheny.db.serialize.Serializer;
 import org.polypheny.db.tools.AlgBuilder;
 import org.polypheny.db.type.PolyType;
 import org.polypheny.db.type.PolyTypeFactoryImpl;
+import org.polypheny.db.type.PolyTypeFamily;
 import org.polypheny.db.type.PolyTypeUtil;
 import org.polypheny.db.util.Bug;
 import org.polypheny.db.util.NumberUtil;
@@ -340,7 +342,10 @@ public class Functions {
     public static Enumerable<?> routeJoinFilter( final DataContext context, final Enumerable<Object[]> baz, byte[] other, PRE_ROUTE preRoute ) {
         LogicalJoin join = Serializer.asDecompressedObject( other, LogicalJoin.class );
         boolean executedRight = preRoute == PRE_ROUTE.RIGHT;
-        boolean transformToValues = true;
+        // to use the values directly is not as straight forward, when they contain multimedia objects, therefore we just fetch again for now
+        boolean transformToValues = executedRight ?
+                !containsMultimedia( join.getRight() ) :
+                !containsMultimedia( join.getLeft() );
 
         List<Object[]> receivedValues = new ArrayList<>();
         boolean isMultiple = false;
@@ -356,7 +361,7 @@ public class Functions {
         AlgBuilder builder = AlgBuilder.create( context.getStatement() );
         RexBuilder rexBuilder = builder.getRexBuilder();
 
-        join.accept( new ClusterSetter( builder.getCluster() ) );
+        join = (LogicalJoin) join.accept( new ClusterSetter( builder ) );
 
         ConditionExtractor extractor = new ConditionExtractor( executedRight, rexBuilder, join.getLeft().getRowType().getFieldCount() );
 
@@ -419,23 +424,31 @@ public class Functions {
                 .prepareQuery(
                         AlgRoot.of( builder.build(), Kind.SELECT ),
                         rexBuilder.getTypeFactory().builder().build(),
-                        false,
+                        true,
                         true,
                         false );
 
-        //List<List<Object>> res = result.getRows( context.getStatement(), -1 );
+        List<List<Object>> res = result.getRows( context.getStatement(), -1 );
 
         return result.enumerable( context );
+    }
+
+
+    private static boolean containsMultimedia( AlgNode node ) {
+        return node.getRowType().getFieldList().stream().anyMatch( f -> PolyTypeFamily.MULTIMEDIA.contains( f.getType() ) );
     }
 
 
     public static class ClusterSetter extends AlgShuttleImpl {
 
         private final AlgOptCluster cluster;
+        private final AlgBuilder builder;
 
 
-        public ClusterSetter( AlgOptCluster cluster ) {
-            this.cluster = cluster;
+        public ClusterSetter( AlgBuilder builder ) {
+            this.cluster = builder.getCluster();
+            this.cluster.setJoinsOptimized( true );
+            this.builder = builder;
         }
 
 
@@ -553,6 +566,10 @@ public class Functions {
 
         @Override
         public AlgNode visit( AlgNode other ) {
+            if ( other instanceof DummyTableScan ) {
+                return builder.scan( ((DummyTableScan) other).getNames() ).build();
+            }
+
             setCluster( (AbstractAlgNode) other, cluster );
             return super.visit( other );
         }

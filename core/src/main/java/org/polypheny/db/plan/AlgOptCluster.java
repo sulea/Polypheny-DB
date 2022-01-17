@@ -39,6 +39,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.Getter;
+import lombok.Setter;
 import org.polypheny.db.algebra.AlgNode;
 import org.polypheny.db.algebra.core.CorrelationId;
 import org.polypheny.db.algebra.metadata.AlgMetadataProvider;
@@ -67,6 +68,9 @@ public class AlgOptCluster {
     private MetadataFactory metadataFactory;
     private final AlgTraitSet emptyTraitSet;
     private AlgMetadataQuery mq;
+    @Getter
+    @Setter
+    private boolean joinsOptimized = false;
 
 
     /**

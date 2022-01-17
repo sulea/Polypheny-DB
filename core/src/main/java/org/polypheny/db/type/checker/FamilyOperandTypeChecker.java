@@ -40,7 +40,7 @@ import org.polypheny.db.util.CoreUtil;
 public class FamilyOperandTypeChecker implements PolySingleOperandTypeChecker {
 
     protected final ImmutableList<PolyTypeFamily> families;
-    protected final Predicate<Integer> optional;
+    protected final transient Predicate<Integer> optional;
 
 
     /**

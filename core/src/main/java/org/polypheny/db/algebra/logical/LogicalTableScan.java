@@ -36,10 +36,13 @@ package org.polypheny.db.algebra.logical;
 
 import com.google.common.collect.ImmutableList;
 import java.util.List;
+import lombok.Getter;
+import org.polypheny.db.algebra.AbstractAlgNode;
 import org.polypheny.db.algebra.AlgCollationTraitDef;
 import org.polypheny.db.algebra.AlgInput;
 import org.polypheny.db.algebra.AlgNode;
 import org.polypheny.db.algebra.core.TableScan;
+import org.polypheny.db.algebra.type.AlgDataType;
 import org.polypheny.db.plan.AlgOptCluster;
 import org.polypheny.db.plan.AlgOptTable;
 import org.polypheny.db.plan.AlgTraitSet;
@@ -118,6 +121,33 @@ public final class LogicalTableScan extends TableScan {
                                 } );
 
         return new LogicalTableScan( cluster, traitSet, algOptTable );
+    }
+
+
+    public static class DummyTableScan extends AbstractAlgNode {
+
+        @Getter
+        private final List<String> names;
+
+
+        /**
+         * Creates an <code>AbstractRelNode</code>.
+         *
+         * @param cluster
+         * @param rowType mirrored rowtype of original {@link }
+         */
+        public DummyTableScan( AlgOptCluster cluster, AlgDataType rowType, List<String> names ) {
+            super( cluster, AlgTraitSet.createEmpty() );
+            this.rowType = rowType;
+            this.names = names;
+        }
+
+
+        @Override
+        public String algCompareString() {
+            throw new RuntimeException( "This is a dummy node only for serializing and should not be cached." );
+        }
+
     }
 
 }
