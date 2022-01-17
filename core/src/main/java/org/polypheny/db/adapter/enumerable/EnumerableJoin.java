@@ -184,7 +184,9 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
 
     @Override
     public Result implement( EnumerableAlgImplementor implementor, Prefer pref ) {
-        if ( !getCluster().isJoinsOptimized() && !(left instanceof Values || right instanceof Values) && RuntimeConfig.PRE_EXECUTE_JOINS.getBoolean() ) {
+        if ( !getCluster().isJoinsOptimized()
+                && !(left instanceof Values || right instanceof Values)
+                && RuntimeConfig.PRE_EXECUTE_JOINS.getBoolean() ) {
             return getOptimizedResult( implementor, pref );
         } else {
             return getDefaultResult( implementor, pref );
@@ -194,7 +196,7 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
 
     private Result getOptimizedResult( EnumerableAlgImplementor implementor, Prefer pref ) {
         BlockBuilder builder = new BlockBuilder();
-        boolean preRouteRight = this.getJoinType() != JoinAlgType.LEFT
+        boolean preExecuteRight = this.getJoinType() != JoinAlgType.LEFT
                 || (this.getJoinType() == JoinAlgType.INNER && left.getTable().getRowCount() < right.getTable().getRowCount());
 
         if ( condition instanceof RexLiteral && condition.isAlwaysTrue() ) {
@@ -202,7 +204,7 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
             return getDefaultResult( implementor, pref );
         }
 
-        final Result enumerable = implementor.visitChild( this, preRouteRight ? 1 : 0, (EnumerableAlg) (preRouteRight ? right : left), pref );
+        final Result enumerable = implementor.visitChild( this, preExecuteRight ? 1 : 0, (EnumerableAlg) (preExecuteRight ? right : left), pref );
         Expression exp = builder.append( "enumerable_" + System.nanoTime(), enumerable.block );
 
         LogicalRebuilder rebuilder = new LogicalRebuilder( getCluster(), getTable() );
@@ -220,7 +222,7 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
                 Expressions.constant( DataContext.ROOT ),
                 exp,
                 nameExpr,
-                Expressions.constant( preRouteRight ? PRE_ROUTE.RIGHT : PRE_ROUTE.LEFT ) );
+                Expressions.constant( preExecuteRight ? PRE_ROUTE.RIGHT : PRE_ROUTE.LEFT ) );
         builder.add( Expressions.return_( null, builder.append( "collector_" + System.nanoTime(), result ) ) );
 
         final PhysType physType =

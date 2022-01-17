@@ -135,7 +135,9 @@ import org.polypheny.db.algebra.logical.LogicalUnion;
 import org.polypheny.db.algebra.logical.LogicalValues;
 import org.polypheny.db.algebra.operators.OperatorName;
 import org.polypheny.db.algebra.type.AlgDataType;
+import org.polypheny.db.algebra.type.AlgDataTypeFieldImpl;
 import org.polypheny.db.algebra.type.AlgDataTypeSystem;
+import org.polypheny.db.algebra.type.AlgRecordType;
 import org.polypheny.db.interpreter.Row;
 import org.polypheny.db.languages.OperatorRegistry;
 import org.polypheny.db.plan.AlgOptCluster;
@@ -410,7 +412,16 @@ public class Functions {
             left = executedRight ? prepared : join.getLeft();
             right = executedRight ? join.getRight() : prepared;
         } else {
-            builder.valuesRows( executedRight ? join.getRight().getRowType() : join.getLeft().getRowType(), receivedValues );
+            AlgDataType rowType = executedRight ? join.getRight().getRowType() : join.getLeft().getRowType();
+            if ( executedRight ? join.getRight() instanceof TableScan : join.getLeft() instanceof TableScan ) {
+                // we need to remove the original physical names as they do no longer match
+                rowType =
+                        new AlgRecordType( rowType.getFieldList()
+                                .stream()
+                                .map( f -> new AlgDataTypeFieldImpl( f.getName(), f.getIndex(), f.getType() ) )
+                                .collect( Collectors.toList() ) );
+            }
+            builder.valuesRows( rowType, receivedValues );
             left = executedRight ? prepared : builder.build();
             right = executedRight ? builder.build() : prepared;
         }
@@ -428,7 +439,7 @@ public class Functions {
                         true,
                         false );
 
-        List<List<Object>> res = result.getRows( context.getStatement(), -1 );
+        //List<List<Object>> res = result.getRows( context.getStatement(), -1 );
 
         return result.enumerable( context );
     }

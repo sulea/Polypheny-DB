@@ -150,8 +150,7 @@ public class PolyResult {
         if ( bindable != null ) {
             return bindable;
         }
-        bindable = preparedResult.getBindable( getCursorFactory() );
-        return bindable;
+        return preparedResult.getBindable( getCursorFactory() );
     }
 
 
