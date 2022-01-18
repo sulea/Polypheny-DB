@@ -135,6 +135,7 @@ import org.polypheny.db.algebra.logical.LogicalUnion;
 import org.polypheny.db.algebra.logical.LogicalValues;
 import org.polypheny.db.algebra.operators.OperatorName;
 import org.polypheny.db.algebra.type.AlgDataType;
+import org.polypheny.db.algebra.type.AlgDataTypeField;
 import org.polypheny.db.algebra.type.AlgDataTypeFieldImpl;
 import org.polypheny.db.algebra.type.AlgDataTypeSystem;
 import org.polypheny.db.algebra.type.AlgRecordType;
@@ -155,9 +156,12 @@ import org.polypheny.db.type.PolyTypeFactoryImpl;
 import org.polypheny.db.type.PolyTypeFamily;
 import org.polypheny.db.type.PolyTypeUtil;
 import org.polypheny.db.util.Bug;
+import org.polypheny.db.util.DateString;
 import org.polypheny.db.util.NumberUtil;
 import org.polypheny.db.util.Static;
+import org.polypheny.db.util.TimeString;
 import org.polypheny.db.util.TimeWithTimeZoneString;
+import org.polypheny.db.util.TimestampString;
 import org.polypheny.db.util.TimestampWithTimeZoneString;
 
 
@@ -341,13 +345,13 @@ public class Functions {
 
 
     @SuppressWarnings("unused")
-    public static Enumerable<?> routeJoinFilter( final DataContext context, final Enumerable<Object[]> baz, byte[] other, PRE_ROUTE preRoute ) {
+    public static Enumerable<?> routeJoinFilter( final DataContext context, final Enumerable<Object> baz, byte[] other, PRE_ROUTE preRoute ) {
         LogicalJoin join = Serializer.asDecompressedObject( other, LogicalJoin.class );
         boolean executedRight = preRoute == PRE_ROUTE.RIGHT;
         // to use the values directly is not as straight forward, when they contain multimedia objects, therefore we just fetch again for now
         boolean transformToValues = executedRight ?
-                !containsMultimedia( join.getRight() ) :
-                !containsMultimedia( join.getLeft() );
+                !containsForbidden( join.getRight() ) :
+                !containsForbidden( join.getLeft() );
 
         List<Object[]> receivedValues = new ArrayList<>();
         boolean isMultiple = false;
@@ -360,6 +364,11 @@ public class Functions {
             }
 
         }
+
+        //List<List<Object>> receivedValues = MetaImpl.collect( CursorFactory.ARRAY, baz.iterator(), new ArrayList<>() );
+
+        adjustValues( executedRight ? join.getRight().getRowType() : join.getLeft().getRowType(), receivedValues );
+
         AlgBuilder builder = AlgBuilder.create( context.getStatement() );
         RexBuilder rexBuilder = builder.getRexBuilder();
 
@@ -399,7 +408,7 @@ public class Functions {
             }
         }
 
-        builder.push( executedRight ? join.getLeft() : join.getRight() );
+        //builder.push( executedRight ? join.getLeft() : join.getRight() );
         if ( nodes.size() > 1 ) {
             builder.filter( rexBuilder.makeCall( OperatorRegistry.get( OperatorName.OR ), nodes ) );
         } else if ( nodes.size() == 1 ) {
@@ -445,8 +454,40 @@ public class Functions {
     }
 
 
-    private static boolean containsMultimedia( AlgNode node ) {
-        return node.getRowType().getFieldList().stream().anyMatch( f -> PolyTypeFamily.MULTIMEDIA.contains( f.getType() ) );
+    // todo dl maybe move
+    private static void adjustValues( AlgDataType algDataType, List<Object[]> receivedValues ) {
+        List<AlgDataTypeField> types = algDataType.getFieldList();
+        for ( Object[] values : receivedValues ) {
+            int i = 0;
+            for ( Object value : values ) {
+                switch ( types.get( i ).getType().getPolyType() ) {
+                    case TIME:
+                        if ( value instanceof Long ) {
+                            values[i] = TimeString.fromMillisOfDay( ((Long) value).intValue() );
+                        }
+                        break;
+                    case DATE:
+                        if ( value instanceof Long ) {
+                            values[i] = DateString.fromDaysSinceEpoch( ((Long) value).intValue() );
+                        } else if ( value instanceof Integer ) {
+                            values[i] = DateString.fromDaysSinceEpoch( (Integer) value );
+                        }
+                        break;
+                    case TIMESTAMP:
+                        if ( value instanceof Long ) {
+                            values[i] = TimestampString.fromMillisSinceEpoch( (Long) value );
+                        }
+                        break;
+                }
+                i++;
+            }
+        }
+    }
+
+
+    // todo dl maybe move
+    private static boolean containsForbidden( AlgNode node ) {
+        return node.getRowType().getFieldList().stream().anyMatch( f -> PolyTypeFamily.MULTIMEDIA.contains( f.getType() ) || f.getType().getPolyType() == PolyType.ARRAY );
     }
 
 

@@ -46,6 +46,7 @@ import java.math.BigDecimal;
 import java.util.AbstractList;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
@@ -120,6 +121,7 @@ import org.polypheny.db.runtime.Hook;
 import org.polypheny.db.schema.SchemaPlus;
 import org.polypheny.db.transaction.Statement;
 import org.polypheny.db.type.PolyType;
+import org.polypheny.db.util.DateString;
 import org.polypheny.db.util.Holder;
 import org.polypheny.db.util.ImmutableBitSet;
 import org.polypheny.db.util.ImmutableIntList;
@@ -127,6 +129,8 @@ import org.polypheny.db.util.ImmutableNullableList;
 import org.polypheny.db.util.Litmus;
 import org.polypheny.db.util.NlsString;
 import org.polypheny.db.util.Pair;
+import org.polypheny.db.util.TimeString;
+import org.polypheny.db.util.TimestampString;
 import org.polypheny.db.util.Util;
 import org.polypheny.db.util.ValidatorUtil;
 import org.polypheny.db.util.mapping.Mapping;
@@ -460,6 +464,12 @@ public class AlgBuilder {
         } else if ( value instanceof byte[] ) {
             // multimedia stream
             return rexBuilder.makeFileLiteral( (byte[]) value );
+        } else if ( value instanceof DateString ) {
+            return rexBuilder.makeDateLiteral( (DateString) value );
+        } else if ( value instanceof TimeString ) {
+            return rexBuilder.makeTimeLiteral( (TimeString) value, value.toString().length() );
+        } else if ( value instanceof TimestampString ) {
+            return rexBuilder.makeTimestampLiteral( (TimestampString) value, value.toString().length() );
         } else {
             throw new IllegalArgumentException( "cannot convert " + value + " (" + value.getClass() + ") to a constant" );
         }
@@ -2154,9 +2164,9 @@ public class AlgBuilder {
      */
     public AlgBuilder valuesRows( AlgDataType rowType, List<Object[]> rowColumnValues ) {
         final ImmutableList.Builder<ImmutableList<RexLiteral>> builder = ImmutableList.builder();
-        for ( Object[] columnValues : rowColumnValues ) {
-            builder.add( tupleList( rowType.getFieldCount(), columnValues ).get( 0 ) );
-        }
+
+        builder.add( tupleList( rowType.getFieldCount(), rowColumnValues.stream().flatMap( Arrays::stream ).toArray() ).get( 0 ) );
+
         AlgNode values = valuesFactory.createValues( cluster, rowType, builder.build() );
         push( values );
         return this;

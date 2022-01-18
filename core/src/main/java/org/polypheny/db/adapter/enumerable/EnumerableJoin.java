@@ -35,8 +35,6 @@ package org.polypheny.db.adapter.enumerable;
 
 
 import com.google.common.collect.ImmutableList;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -289,19 +287,6 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
             //builder.scan( getLogicalTableName( scan.getTable() ) );
             builder.push( new DummyTableScan( cluster, scan.getRowType(), scan.getTable().getQualifiedName() ) );
             return scan;
-        }
-
-
-        private static List<String> getLogicalTableName( AlgOptTable table ) {
-            List<String> originalNames = table.getQualifiedName();
-            // [name]_[partitionId]
-            List<String> names = new ArrayList<>( Arrays.asList( originalNames.get( 1 ).split( "_" ) ) );
-            names = names.subList( 0, names.size() - 1 );
-
-            // [storeName]_[name]_[adapter]
-            List<String> schemas = new ArrayList<>( Arrays.asList( originalNames.get( 0 ).split( "_" ) ) );
-            schemas = schemas.subList( 1, schemas.size() - 1 );
-            return Arrays.asList( String.join( "_", schemas ), String.join( "_", names ) );
         }
 
 
