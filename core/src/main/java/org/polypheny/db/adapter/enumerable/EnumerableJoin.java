@@ -184,7 +184,7 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
     public Result implement( EnumerableAlgImplementor implementor, Prefer pref ) {
         if ( !getCluster().isJoinsOptimized()
                 && !(left instanceof Values || right instanceof Values)
-                && RuntimeConfig.PRE_EXECUTE_JOINS.getBoolean() && false ) {
+                && RuntimeConfig.PRE_EXECUTE_JOINS.getBoolean() ) {
             return getOptimizedResult( implementor, pref );
         } else {
             return getDefaultResult( implementor, pref );
