@@ -46,7 +46,6 @@ import java.math.BigDecimal;
 import java.util.AbstractList;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
@@ -2164,9 +2163,9 @@ public class AlgBuilder {
      */
     public AlgBuilder valuesRows( AlgDataType rowType, List<Object[]> rowColumnValues ) {
         final ImmutableList.Builder<ImmutableList<RexLiteral>> builder = ImmutableList.builder();
-
-        builder.add( tupleList( rowType.getFieldCount(), rowColumnValues.stream().flatMap( Arrays::stream ).toArray() ).get( 0 ) );
-
+        for ( Object[] columnValues : rowColumnValues ) {
+            builder.add( tupleList( rowType.getFieldCount(), columnValues ).get( 0 ) );
+        }
         AlgNode values = valuesFactory.createValues( cluster, rowType, builder.build() );
         push( values );
         return this;
