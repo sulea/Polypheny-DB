@@ -144,7 +144,7 @@ public class InformationPage extends Refreshable {
                     id = in.nextString();
                     break;
                 case "name":
-                    name = in.nextName();
+                    name = in.nextString();
                     break;
                 case "description":
                     description = in.nextString();
