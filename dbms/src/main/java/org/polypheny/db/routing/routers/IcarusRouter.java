@@ -85,6 +85,7 @@ public class IcarusRouter extends FullPlacementQueryRouter {
             // Add placement in order of list to combine full placements of one store
             if ( placements.size() != builders.size() ) {
                 log.error( "Not allowed! With Icarus, this should not happen" );
+                throw new RuntimeException( "Not allowed! With Icarus, this should not happen" );
             }
 
             for ( List<CatalogColumnPlacement> currentPlacement : placements ) {
