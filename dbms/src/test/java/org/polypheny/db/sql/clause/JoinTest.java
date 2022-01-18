@@ -444,12 +444,12 @@ public class JoinTest {
                 );
 
                 PreparedStatement prepared = connection.prepareStatement( "SELECT * FROM "
-                        + "(SELECT id, distance(feature, ?, 'L2') as dist "
+                        + "(SELECT id, distance(feature, ARRAY[0.1,0.2,0.3], 'L2') as dist "
                         + "FROM cineast.features_averagecolor ORDER BY dist ASC LIMIT 500) AS feature "
                         + "INNER JOIN cineast.cineast_segment AS segment ON (feature.id = segment.segmentid) "
-                        + "INNER JOIN cineast.cineast_multimediaobject AS object ON (segment.objectid = object.objectid)" );
+                        + "INNER JOIN (SELECT * FROM cineast.cineast_multimediaobject WHERE objectid = ?) AS object ON (segment.objectid = object.objectid)" );
 
-                prepared.setString( 0, "[0.1,0.2,0.3]" );
+                prepared.setInt( 1, 1 );
                 ResultSet rs = prepared.executeQuery();
 
                 TestHelper.checkResultSet(
