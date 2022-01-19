@@ -79,13 +79,12 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
-import java.util.Stack;
 import java.util.TimeZone;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.calcite.avatica.util.ByteString;
 import org.apache.calcite.avatica.util.DateTimeUtils;
@@ -103,6 +102,7 @@ import org.apache.calcite.linq4j.function.NonDeterministic;
 import org.apache.calcite.linq4j.tree.Primitive;
 import org.polypheny.db.PolyResult;
 import org.polypheny.db.adapter.DataContext;
+import org.polypheny.db.adapter.enumerable.EnumerableJoin.ConditionExtractor;
 import org.polypheny.db.adapter.enumerable.EnumerableJoin.PRE_ROUTE;
 import org.polypheny.db.adapter.enumerable.JavaRowFormat;
 import org.polypheny.db.algebra.AbstractAlgNode;
@@ -136,24 +136,19 @@ import org.polypheny.db.algebra.logical.LogicalValues;
 import org.polypheny.db.algebra.operators.OperatorName;
 import org.polypheny.db.algebra.type.AlgDataType;
 import org.polypheny.db.algebra.type.AlgDataTypeField;
-import org.polypheny.db.algebra.type.AlgDataTypeFieldImpl;
 import org.polypheny.db.algebra.type.AlgDataTypeSystem;
-import org.polypheny.db.algebra.type.AlgRecordType;
+import org.polypheny.db.config.RuntimeConfig;
 import org.polypheny.db.interpreter.Row;
 import org.polypheny.db.languages.OperatorRegistry;
 import org.polypheny.db.plan.AlgOptCluster;
 import org.polypheny.db.plan.AlgTraitSet;
 import org.polypheny.db.rex.RexBuilder;
-import org.polypheny.db.rex.RexCall;
-import org.polypheny.db.rex.RexInputRef;
 import org.polypheny.db.rex.RexNode;
-import org.polypheny.db.rex.RexShuttle;
 import org.polypheny.db.runtime.FlatLists.ComparableList;
 import org.polypheny.db.serialize.Serializer;
 import org.polypheny.db.tools.AlgBuilder;
 import org.polypheny.db.type.PolyType;
 import org.polypheny.db.type.PolyTypeFactoryImpl;
-import org.polypheny.db.type.PolyTypeFamily;
 import org.polypheny.db.type.PolyTypeUtil;
 import org.polypheny.db.util.Bug;
 import org.polypheny.db.util.DateString;
@@ -348,101 +343,66 @@ public class Functions {
     public static Enumerable<?> routeJoinFilter( final DataContext context, final Enumerable<Object> baz, byte[] other, PRE_ROUTE preRoute ) {
         LogicalJoin join = Serializer.asDecompressedObject( other, LogicalJoin.class );
         boolean executedRight = preRoute == PRE_ROUTE.RIGHT;
-        // to use the values directly is not as straight forward, when they contain multimedia objects, therefore we just fetch again for now
-        boolean transformToValues = executedRight ?
-                !containsForbidden( join.getRight() ) :
-                !containsForbidden( join.getLeft() );
-
-        List<Object[]> receivedValues = new ArrayList<>();
-        boolean isMultiple = false;
-        for ( Object objects : baz ) {
-            if ( isMultiple || objects instanceof Object[] ) {
-                receivedValues.add( (Object[]) objects );
-                isMultiple = true;
-            } else {
-                receivedValues.add( new Object[]{ objects } );
-            }
-
-        }
-
-        //List<List<Object>> receivedValues = MetaImpl.collect( CursorFactory.ARRAY, baz.iterator(), new ArrayList<>() );
-
-        adjustValues( executedRight ? join.getRight().getRowType() : join.getLeft().getRowType(), receivedValues );
 
         AlgBuilder builder = AlgBuilder.create( context.getStatement() );
         RexBuilder rexBuilder = builder.getRexBuilder();
 
         join = (LogicalJoin) join.accept( new ClusterSetter( builder ) );
 
+        List<Object[]> receivedValues = new ArrayList<>();
+        boolean isMultiple = false;
+        long i = 0;
+        for ( Object objects : baz ) {
+            if ( i > RuntimeConfig.PRE_EXECUTE_JOINS_THRESHOLD.getInteger() ) {
+                // this would produce a filter which is huge
+                // we take the L and execute the original join
+
+                return executeQuery( context, join, rexBuilder );
+            }
+
+            if ( isMultiple || objects instanceof Object[] ) {
+                receivedValues.add( (Object[]) objects );
+                isMultiple = true;
+            } else {
+                receivedValues.add( new Object[]{ objects } );
+            }
+            i++;
+        }
+
         ConditionExtractor extractor = new ConditionExtractor( executedRight, rexBuilder, join.getLeft().getRowType().getFieldCount() );
 
-        join.accept( extractor );
+        Function<Object[], RexNode> conditionCreator = join.getCondition().accept( extractor );
+
+        adjustValues( executedRight ? join.getRight().getRowType() : join.getLeft().getRowType(), receivedValues );
 
         builder.push( executedRight ? join.getLeft() : join.getRight() );
 
-        List<RexNode> nodes = new ArrayList<>();
-        for ( Object[] row : receivedValues ) {
-            List<RexNode> ands = new ArrayList<>();
-            int pos = 0;
-            int offset = 0;
-            for ( Object o : row ) {
-                if ( extractor.projects.size() <= pos ) {
-                    // consumed all needed value could also break complete for
-                    continue;
-                }
-                RexInputRef actual = extractor.projects.get( pos );
-                if ( actual.getIndex() != (pos + offset) ) {
-                    // we get too many results and have to ignore the unnecessary ones
-                    offset++;
-                    continue;
-                }
-                RexInputRef ref = extractor.otherProjects.get( pos );
-                ands.add(
-                        builder.equals( builder.field( ref.getIndex() ), rexBuilder.makeLiteral( o, ref.getType(), false ) ) );
-                pos++;
-            }
-            if ( ands.size() > 1 ) {
-                nodes.add( builder.and( ands ) );
-            } else {
-                nodes.add( ands.get( 0 ) );
-            }
-        }
-
-        //builder.push( executedRight ? join.getLeft() : join.getRight() );
+        List<RexNode> nodes = receivedValues.stream().map( conditionCreator ).collect( Collectors.toList() );
         if ( nodes.size() > 1 ) {
             builder.filter( rexBuilder.makeCall( OperatorRegistry.get( OperatorName.OR ), nodes ) );
         } else if ( nodes.size() == 1 ) {
             builder.filter( nodes.get( 0 ) );
         }
-        AlgNode left;
-        AlgNode right;
         AlgNode prepared = builder.build();
-        if ( !transformToValues ) {
-            left = executedRight ? prepared : join.getLeft();
-            right = executedRight ? join.getRight() : prepared;
-        } else {
-            AlgDataType rowType = executedRight ? join.getRight().getRowType() : join.getLeft().getRowType();
-            if ( executedRight ? join.getRight() instanceof TableScan : join.getLeft() instanceof TableScan ) {
-                // we need to remove the original physical names as they do no longer match
-                rowType =
-                        new AlgRecordType( rowType.getFieldList()
-                                .stream()
-                                .map( f -> new AlgDataTypeFieldImpl( f.getName(), f.getIndex(), f.getType() ) )
-                                .collect( Collectors.toList() ) );
-            }
-            builder.valuesRows( rowType, receivedValues );
-            left = executedRight ? prepared : builder.build();
-            right = executedRight ? builder.build() : prepared;
-        }
+        AlgNode left = executedRight ? prepared : join.getLeft();
+        AlgNode right = executedRight ? join.getRight() : prepared;
+
         builder.push( left );
         builder.push( right );
         builder.join( join.getJoinType(), join.getCondition() );
 
+        builder.getCluster().setJoinsOptimized( true );
+        return executeQuery( context, (LogicalJoin) builder.build(), rexBuilder );
+    }
+
+
+    private static Enumerable<Object> executeQuery( DataContext context, LogicalJoin join, RexBuilder rexBuilder ) {
+        join.getCluster().setJoinsOptimized( true );
         PolyResult result = context
                 .getStatement()
                 .getQueryProcessor()
                 .prepareQuery(
-                        AlgRoot.of( builder.build(), Kind.SELECT ),
+                        AlgRoot.of( join, Kind.SELECT ),
                         rexBuilder.getTypeFactory().builder().build(),
                         true,
                         true,
@@ -482,12 +442,6 @@ public class Functions {
                 i++;
             }
         }
-    }
-
-
-    // todo dl maybe move
-    private static boolean containsForbidden( AlgNode node ) {
-        return node.getRowType().getFieldList().stream().anyMatch( f -> PolyTypeFamily.MULTIMEDIA.contains( f.getType() ) || f.getType().getPolyType() == PolyType.ARRAY );
     }
 
 
@@ -635,86 +589,6 @@ public class Functions {
             set = set.replace( 1, other.getTraitSet().get( 1 ) );
             other.setTraitSet( set );
             other.setCluster( cluster );
-        }
-
-    }
-
-
-    public static class ConditionExtractor extends RexShuttle {
-
-        private final boolean preRouteRight;
-        private final RexBuilder rexBuilder;
-        private final int leftSize;
-
-        @Getter
-        private final List<RexNode> filters = new ArrayList<>();
-        // projects on side of executed node
-        @Getter
-        private List<RexInputRef> projects = new ArrayList<>();
-        // projects other side
-        @Getter
-        private List<RexInputRef> otherProjects = new ArrayList<>();
-
-        private final Stack<RexNode> stack = new Stack<>();
-
-
-        public ConditionExtractor( boolean preRouteRight, RexBuilder rexBuilder, int leftSize ) {
-            this.preRouteRight = preRouteRight;
-            this.rexBuilder = rexBuilder;
-            this.leftSize = leftSize;
-        }
-
-
-        @Override
-        public RexNode visitInputRef( RexInputRef inputRef ) {
-            RexInputRef project = null;
-            RexInputRef otherProject = null;
-
-            if ( inputRef.getIndex() >= leftSize ) {
-                // is from right
-                if ( preRouteRight ) {
-                    project = rexBuilder.makeInputRef( inputRef.getType(), inputRef.getIndex() - leftSize );
-                } else {
-                    // add not routed ref into other projection collection to use it after
-                    otherProject = rexBuilder.makeInputRef( inputRef.getType(), inputRef.getIndex() - leftSize );
-                }
-            } else {
-                // is from left
-                if ( !preRouteRight ) {
-                    project = rexBuilder.makeInputRef( inputRef.getType(), inputRef.getIndex() );
-                } else {
-                    otherProject = rexBuilder.makeInputRef( inputRef.getType(), inputRef.getIndex() );
-                }
-            }
-
-            if ( project != null ) {
-                projects.add( project );
-                stack.add( project );
-            }
-            if ( otherProject != null ) {
-                otherProjects.add( otherProject );
-            }
-            return inputRef;
-        }
-
-
-        @Override
-        public RexNode visitCall( RexCall call ) {
-            call.operands.forEach( c -> c.accept( this ) );
-
-            if ( stack.size() == 1 || stack.isEmpty() ) {
-                return call;
-            }
-
-            switch ( call.op.getOperatorName() ) {
-                case EQUALS:
-                case NOT_EQUALS:
-                    filters.add( rexBuilder.makeCall( call.op, stack ) );
-                    break;
-                case AND:
-                case OR:
-            }
-            return call;
         }
 
     }

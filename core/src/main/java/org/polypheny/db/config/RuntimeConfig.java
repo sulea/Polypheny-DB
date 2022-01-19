@@ -322,8 +322,8 @@ public enum RuntimeConfig {
 
     PRE_EXECUTE_JOINS_THRESHOLD(
             "runtime/preExecuteJoinsThreshold",
-            "The estimated rowcount under which optimized joins are used.",
-            1000,
+            "How many values should maximally used to create a join filter, if this is reached a normal join is used.",
+            10000,
             ConfigType.INTEGER,
             "queryParameterizationGroup"
     ),

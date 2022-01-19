@@ -37,6 +37,7 @@ package org.polypheny.db.adapter.enumerable;
 import com.google.common.collect.ImmutableList;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.apache.calcite.linq4j.tree.BlockBuilder;
 import org.apache.calcite.linq4j.tree.Expression;
@@ -62,6 +63,7 @@ import org.polypheny.db.algebra.core.Sort;
 import org.polypheny.db.algebra.core.TableScan;
 import org.polypheny.db.algebra.core.Values;
 import org.polypheny.db.algebra.logical.LogicalAggregate;
+import org.polypheny.db.algebra.logical.LogicalJoin;
 import org.polypheny.db.algebra.logical.LogicalSort;
 import org.polypheny.db.algebra.logical.LogicalTableScan.DummyTableScan;
 import org.polypheny.db.algebra.metadata.AlgMdCollation;
@@ -73,10 +75,22 @@ import org.polypheny.db.plan.AlgOptPlanner;
 import org.polypheny.db.plan.AlgOptSchema;
 import org.polypheny.db.plan.AlgOptTable;
 import org.polypheny.db.plan.AlgTraitSet;
+import org.polypheny.db.rex.RexBuilder;
+import org.polypheny.db.rex.RexCall;
+import org.polypheny.db.rex.RexCorrelVariable;
+import org.polypheny.db.rex.RexDynamicParam;
+import org.polypheny.db.rex.RexFieldAccess;
+import org.polypheny.db.rex.RexInputRef;
 import org.polypheny.db.rex.RexLiteral;
 import org.polypheny.db.rex.RexLocalRef;
 import org.polypheny.db.rex.RexNode;
+import org.polypheny.db.rex.RexOver;
+import org.polypheny.db.rex.RexPatternFieldRef;
 import org.polypheny.db.rex.RexProgram;
+import org.polypheny.db.rex.RexRangeRef;
+import org.polypheny.db.rex.RexSubQuery;
+import org.polypheny.db.rex.RexTableInputRef;
+import org.polypheny.db.rex.RexVisitor;
 import org.polypheny.db.serialize.Serializer;
 import org.polypheny.db.tools.AlgBuilder;
 import org.polypheny.db.util.BuiltInMethod;
@@ -196,12 +210,10 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
         BlockBuilder builder = new BlockBuilder();
         boolean preExecuteRight = this.getJoinType() != JoinAlgType.LEFT
                 || (this.getJoinType() == JoinAlgType.INNER
-                && left.estimateRowCount( AlgMetadataQuery.instance() ) < right.estimateRowCount( AlgMetadataQuery.instance() ));
+                && left.estimateRowCount( AlgMetadataQuery.instance() )
+                > right.estimateRowCount( AlgMetadataQuery.instance() ));
 
-        if ( condition instanceof RexLiteral && condition.isAlwaysTrue()
-                || (preExecuteRight
-                ? right.estimateRowCount( AlgMetadataQuery.instance() ) : left.estimateRowCount( AlgMetadataQuery.instance() ))
-                > RuntimeConfig.PRE_EXECUTE_JOINS_THRESHOLD.getInteger() ) {
+        if ( condition instanceof RexLiteral && condition.isAlwaysTrue() ) {
             // cross product cannot be optimized
             return getDefaultResult( implementor, pref );
         }
@@ -232,7 +244,14 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
                         implementor.getTypeFactory(),
                         getRowType(),
                         pref.prefer( JavaRowFormat.CUSTOM ) );
+
+        getCluster().setJoinsOptimized( true );
         return implementor.result( physType, builder.toBlock() );
+    }
+
+
+    private boolean getLeftHasUsableLimit( LogicalJoin node ) {
+        return false;
     }
 
 
@@ -359,6 +378,121 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
             }
             return other;
         }
+
+    }
+
+
+    public static class ConditionExtractor implements RexVisitor<Function<Object[], RexNode>> {
+
+        private final boolean getRightAsLiterals;
+        private final RexBuilder rexBuilder;
+        private final int leftSize;
+
+
+        public ConditionExtractor( boolean getRightAsLiterals, RexBuilder rexBuilder, int leftSize ) {
+            this.getRightAsLiterals = getRightAsLiterals;
+            this.rexBuilder = rexBuilder;
+            this.leftSize = leftSize;
+        }
+
+
+        @Override
+        public Function<Object[], RexNode> visitInputRef( RexInputRef inputRef ) {
+            if ( getRightAsLiterals ) {
+                // right = literals, left = inputs
+                if ( inputRef.getIndex() >= leftSize ) {
+                    // we are right
+                    return ( o ) -> rexBuilder.makeLiteral( o[inputRef.getIndex() - leftSize], inputRef.getType(), false );
+                } else {
+                    return ( o ) -> rexBuilder.makeInputRef( inputRef.getType(), inputRef.getIndex() );
+                }
+            } else {
+                // left = literals, right = inputs
+                if ( inputRef.getIndex() < leftSize ) {
+                    // we are left
+                    return ( o ) -> rexBuilder.makeLiteral( o[inputRef.getIndex()], inputRef.getType(), false );
+                } else {
+                    return ( o ) -> rexBuilder.makeInputRef( inputRef.getType(), inputRef.getIndex() - leftSize );
+                }
+            }
+        }
+
+
+        @Override
+        public Function<Object[], RexNode> visitLocalRef( RexLocalRef localRef ) {
+            return ( o ) -> localRef;
+        }
+
+
+        @Override
+        public Function<Object[], RexNode> visitLiteral( RexLiteral literal ) {
+            return ( o ) -> literal;
+        }
+
+
+        @Override
+        public Function<Object[], RexNode> visitCall( RexCall call ) {
+            // collect needed functions
+            List<Function<Object[], RexNode>> ops = call.operands
+                    .stream()
+                    .map( o -> o.accept( this ) )
+                    .collect( Collectors.toList() );
+
+            // create lambda, which calls all of them and returns a new Function
+            return ( o ) -> rexBuilder.makeCall(
+                    call.op,
+                    ops.stream().map( e -> e.apply( o ) ).collect( Collectors.toList() ) );
+
+        }
+
+
+        @Override
+        public Function<Object[], RexNode> visitOver( RexOver over ) {
+            return ( o ) -> over;
+        }
+
+
+        @Override
+        public Function<Object[], RexNode> visitCorrelVariable( RexCorrelVariable correlVariable ) {
+            return ( o ) -> correlVariable;
+        }
+
+
+        @Override
+        public Function<Object[], RexNode> visitDynamicParam( RexDynamicParam dynamicParam ) {
+            return ( o ) -> dynamicParam;
+        }
+
+
+        @Override
+        public Function<Object[], RexNode> visitRangeRef( RexRangeRef rangeRef ) {
+            return ( o ) -> rangeRef;
+        }
+
+
+        @Override
+        public Function<Object[], RexNode> visitFieldAccess( RexFieldAccess fieldAccess ) {
+            return ( o ) -> fieldAccess;
+        }
+
+
+        @Override
+        public Function<Object[], RexNode> visitSubQuery( RexSubQuery subQuery ) {
+            return ( o ) -> subQuery;
+        }
+
+
+        @Override
+        public Function<Object[], RexNode> visitTableInputRef( RexTableInputRef fieldRef ) {
+            return ( o ) -> fieldRef;
+        }
+
+
+        @Override
+        public Function<Object[], RexNode> visitPatternFieldRef( RexPatternFieldRef fieldRef ) {
+            return ( o ) -> fieldRef;
+        }
+
 
     }
 

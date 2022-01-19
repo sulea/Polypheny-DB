@@ -94,6 +94,12 @@ public class JoinTest {
                 statement.executeUpdate( "CREATE TABLE cineast.cineast_segment (id INTEGER NOT NULL, segmentid INTEGER, objectid INTEGER, PRIMARY KEY (id))" );
                 statement.executeUpdate( "CREATE TABLE cineast.cineast_multimediaobject (objectid INTEGER NOT NULL, PRIMARY KEY (objectid))" );
 
+                /*
+                statement.executeUpdate( "CREATE TABLE cineast.features_averagecolor (id VARCHAR(255) NOT NULL, feature REAL ARRAY(1,3), PRIMARY KEY (id))" );
+                statement.executeUpdate( "CREATE TABLE cineast.cineast_segment (segmentid VARCHAR(255) NOT NULL, objectid VARCHAR(255), segmentnumber INTEGER, segmentstart INTEGER, segmentend INTEGER, segmentstarttabs REAL, segmentendtabs REAL, PRIMARY KEY (segmentid))" );
+                statement.executeUpdate( "CREATE TABLE cineast.cineast_multimediaobject (objectid VARCHAR(255) NOT NULL, mediatype INTEGER, name VARCHAR(255), path VARCHAR(255), PRIMARY KEY (objectid))" );
+                 */
+
                 statement.executeUpdate( "INSERT INTO cineast.features_averagecolor VALUES (1, ARRAY[0, 0, 0])" );
                 statement.executeUpdate( "INSERT INTO cineast.cineast_segment VALUES (1, 1, 1)" );
                 statement.executeUpdate( "INSERT INTO cineast.cineast_multimediaobject VALUES (1)" );
