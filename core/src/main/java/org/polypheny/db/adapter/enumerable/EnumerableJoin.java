@@ -195,9 +195,13 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
     private Result getOptimizedResult( EnumerableAlgImplementor implementor, Prefer pref ) {
         BlockBuilder builder = new BlockBuilder();
         boolean preExecuteRight = this.getJoinType() != JoinAlgType.LEFT
-                || (this.getJoinType() == JoinAlgType.INNER && left.getTable().getRowCount() < right.getTable().getRowCount());
+                || (this.getJoinType() == JoinAlgType.INNER
+                && left.estimateRowCount( AlgMetadataQuery.instance() ) < right.estimateRowCount( AlgMetadataQuery.instance() ));
 
-        if ( condition instanceof RexLiteral && condition.isAlwaysTrue() ) {
+        if ( condition instanceof RexLiteral && condition.isAlwaysTrue()
+                || (preExecuteRight
+                ? right.estimateRowCount( AlgMetadataQuery.instance() ) : left.estimateRowCount( AlgMetadataQuery.instance() ))
+                > RuntimeConfig.PRE_EXECUTE_JOINS_THRESHOLD.getInteger() ) {
             // cross product cannot be optimized
             return getDefaultResult( implementor, pref );
         }

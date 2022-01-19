@@ -320,6 +320,14 @@ public enum RuntimeConfig {
             ConfigType.BOOLEAN,
             "queryParameterizationGroup" ),
 
+    PRE_EXECUTE_JOINS_THRESHOLD(
+            "runtime/preExecuteJoinsThreshold",
+            "The estimated rowcount under which optimized joins are used.",
+            1000,
+            ConfigType.INTEGER,
+            "queryParameterizationGroup"
+    ),
+
     PARAMETERIZE_INTERVALS(
             "runtime/parameterizeIntervals",
             "Whether intervals should be parameterized.",
