@@ -89,7 +89,7 @@ public class IcarusRouter extends FullPlacementQueryRouter {
             }
 
             for ( List<CatalogColumnPlacement> currentPlacement : placements ) {
-                final Map<Long, List<CatalogColumnPlacement>> currentPlacementDistribution = new HashMap<Long, List<CatalogColumnPlacement>>();
+                final Map<Long, List<CatalogColumnPlacement>> currentPlacementDistribution = new HashMap<>();
                 currentPlacementDistribution.put( catalogTable.partitionProperty.partitionIds.get( 0 ), currentPlacement );
 
                 // AdapterId for all col placements same
@@ -118,6 +118,12 @@ public class IcarusRouter extends FullPlacementQueryRouter {
                 newBuilder.push( super.buildJoinedTableScan( statement, cluster, currentPlacementDistribution ) );
                 newBuilders.add( newBuilder );
             }
+            if ( newBuilders.isEmpty() ) {
+                // apparently we have a problem and no builder fits
+                cancelQuery = true;
+                return Collections.emptyList();
+            }
+
         }
 
         builders.clear();

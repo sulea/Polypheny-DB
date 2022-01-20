@@ -125,10 +125,6 @@ public abstract class BaseRouter {
             builders.forEach(
                     builder -> builder.replaceTop( node.copy( node.getTraitSet(), ImmutableList.of( builder.peek( 1 ), builder.peek( 0 ) ) ), 2 )
             );
-        } else if ( node.getInputs().size() == 3 ) { // ConditionalTableModify
-            builders.forEach(
-                    builder -> builder.replaceTop( node.copy( node.getTraitSet(), ImmutableList.of( builder.peek( 2 ), builder.peek( 1 ), builder.peek( 0 ) ) ) )
-            );
         } else {
             throw new RuntimeException( "Unexpected number of input elements: " + node.getInputs().size() );
         }
