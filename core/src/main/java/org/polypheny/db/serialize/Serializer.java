@@ -21,6 +21,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterOutputStream;
+import org.apache.calcite.avatica.util.ByteString;
 import org.nustaq.serialization.FSTConfiguration;
 
 public class Serializer {
@@ -75,6 +76,16 @@ public class Serializer {
 
     public static <T> T asDecompressedObject( byte[] array, Class<T> clazz ) {
         return asObject( decompress( array ), clazz );
+    }
+
+
+    public static <T> T asDecompressedObject( String array, Class<T> clazz ) {
+        return asDecompressedObject( ByteString.parseBase64( array ), clazz );
+    }
+
+
+    public static String asCompressedByteString( Object node ) {
+        return new ByteString( asCompressedByteArray( node ) ).toBase64String();
     }
 
 }

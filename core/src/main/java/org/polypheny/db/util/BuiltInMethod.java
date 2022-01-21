@@ -73,7 +73,7 @@ import org.apache.calcite.linq4j.tree.Types;
 import org.polypheny.db.adapter.DataContext;
 import org.polypheny.db.adapter.enumerable.AggregateLambdaFactory;
 import org.polypheny.db.adapter.enumerable.BatchIteratorEnumerable;
-import org.polypheny.db.adapter.enumerable.EnumerableJoin.PRE_ROUTE;
+import org.polypheny.db.adapter.enumerable.EnumerableJoin.PRE_EXECUTE;
 import org.polypheny.db.adapter.enumerable.OrderedAggregateLambdaFactory;
 import org.polypheny.db.adapter.enumerable.SequencedAdderAggregateLambdaFactory;
 import org.polypheny.db.adapter.enumerable.SourceSorter;
@@ -137,7 +137,7 @@ import org.polypheny.db.type.PolyType;
  * Built-in methods.
  */
 public enum BuiltInMethod {
-    ROUTE_JOIN_FILTER( Functions.class, "routeJoinFilter", DataContext.class, Enumerable.class, byte[].class, PRE_ROUTE.class ),
+    ROUTE_JOIN_FILTER( Functions.class, "routeJoinFilter", DataContext.class, Enumerable.class, Function1.class, Function1.class, Function2.class, EqualityComparer.class, String.class, PRE_EXECUTE.class ),
     BATCH( Functions.class, "batch", DataContext.class, Enumerable.class ),
     STREAM_RIGHT( Functions.class, "streamRight", DataContext.class, Enumerable.class, List.class ),
     ENFORCE_CONSTRAINT( Functions.class, "enforceConstraint", Enumerable.class, Enumerable.class, List.class, List.class ),

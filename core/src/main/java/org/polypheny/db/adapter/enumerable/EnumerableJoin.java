@@ -39,6 +39,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.calcite.linq4j.tree.BlockBuilder;
 import org.apache.calcite.linq4j.tree.Expression;
 import org.apache.calcite.linq4j.tree.Expressions;
@@ -63,7 +64,6 @@ import org.polypheny.db.algebra.core.Sort;
 import org.polypheny.db.algebra.core.TableScan;
 import org.polypheny.db.algebra.core.Values;
 import org.polypheny.db.algebra.logical.LogicalAggregate;
-import org.polypheny.db.algebra.logical.LogicalJoin;
 import org.polypheny.db.algebra.logical.LogicalSort;
 import org.polypheny.db.algebra.logical.LogicalTableScan.DummyTableScan;
 import org.polypheny.db.algebra.metadata.AlgMdCollation;
@@ -102,6 +102,7 @@ import org.polypheny.db.util.Util;
 /**
  * Implementation of {@link Join} in {@link EnumerableConvention enumerable calling convention}.
  */
+@Slf4j
 public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
 
 
@@ -199,7 +200,7 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
         if ( !getCluster().isJoinsOptimized()
                 && !(left instanceof Values || right instanceof Values)
                 && RuntimeConfig.PRE_EXECUTE_JOINS.getBoolean() ) {
-            return getOptimizedResult( implementor, pref );
+            return getBetterOptimizedResult( implementor, pref );
         } else {
             return getDefaultResult( implementor, pref );
         }
@@ -207,11 +208,14 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
 
 
     private Result getOptimizedResult( EnumerableAlgImplementor implementor, Prefer pref ) {
+        log.warn( String.valueOf( left.estimateRowCount( AlgMetadataQuery.instance() ) ) );
+        log.warn( String.valueOf( right.estimateRowCount( AlgMetadataQuery.instance() ) ) );
+
         BlockBuilder builder = new BlockBuilder();
         boolean preExecuteRight = this.getJoinType() != JoinAlgType.LEFT
-                || (this.getJoinType() == JoinAlgType.INNER
+                && this.getJoinType() == JoinAlgType.INNER
                 && left.estimateRowCount( AlgMetadataQuery.instance() )
-                > right.estimateRowCount( AlgMetadataQuery.instance() ));
+                < right.estimateRowCount( AlgMetadataQuery.instance() );
 
         if ( condition instanceof RexLiteral && condition.isAlwaysTrue() ) {
             // cross product cannot be optimized
@@ -219,24 +223,26 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
         }
 
         final Result enumerable = implementor.visitChild( this, preExecuteRight ? 1 : 0, (EnumerableAlg) (preExecuteRight ? right : left), pref );
+
         Expression exp = builder.append( "enumerable_" + System.nanoTime(), enumerable.block );
 
         LogicalRebuilder rebuilder = new LogicalRebuilder( getCluster(), getTable() );
         this.accept( rebuilder );
         AlgNode rebuild = rebuilder.builder.build();
 
-        byte[] compressed = Serializer.asCompressedByteArray( rebuild );
+        String compressed = Serializer.asCompressedByteString( rebuild );
 
         String name = builder.newName( "join_" + System.nanoTime() );
-        ParameterExpression nameExpr = Expressions.parameter( byte[].class, name );
+        ParameterExpression nameExpr = Expressions.parameter( String.class, name );
         implementor.getNodes().put( nameExpr, compressed );
 
         Expression result = Expressions.call(
                 BuiltInMethod.ROUTE_JOIN_FILTER.method,
                 Expressions.constant( DataContext.ROOT ),
                 exp,
+                exp,
                 nameExpr,
-                Expressions.constant( preExecuteRight ? PRE_ROUTE.RIGHT : PRE_ROUTE.LEFT ) );
+                Expressions.constant( preExecuteRight ? PRE_EXECUTE.RIGHT : PRE_EXECUTE.LEFT ) );
         builder.add( Expressions.return_( null, builder.append( "collector_" + System.nanoTime(), result ) ) );
 
         final PhysType physType =
@@ -245,17 +251,59 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
                         getRowType(),
                         pref.prefer( JavaRowFormat.CUSTOM ) );
 
-        getCluster().setJoinsOptimized( true );
         return implementor.result( physType, builder.toBlock() );
     }
 
 
-    private boolean getLeftHasUsableLimit( LogicalJoin node ) {
-        return false;
+    private Result getBetterOptimizedResult( EnumerableAlgImplementor implementor, Prefer pref ) {
+        log.warn( String.valueOf( left.estimateRowCount( AlgMetadataQuery.instance() ) ) );
+        log.warn( String.valueOf( right.estimateRowCount( AlgMetadataQuery.instance() ) ) );
+
+        boolean preExecuteRight = this.getJoinType() == JoinAlgType.RIGHT;
+                /*&& this.getJoinType() == JoinAlgType.INNER
+                && left.estimateRowCount( AlgMetadataQuery.instance() )
+                > right.estimateRowCount( AlgMetadataQuery.instance() );*/
+
+        if ( condition instanceof RexLiteral && condition.isAlwaysTrue() ) {
+            // cross product cannot be optimized
+            return getDefaultResult( implementor, pref );
+        }
+        BlockBuilder builder = new BlockBuilder();
+
+        LogicalRebuilder rebuilder = new LogicalRebuilder( getCluster(), getTable() );
+        this.accept( rebuilder );
+        AlgNode rebuild = rebuilder.builder.build();
+
+        String compressed = Serializer.asCompressedByteString( rebuild );
+
+        String name = builder.newName( "join_" + System.nanoTime() );
+        ParameterExpression nameExpr = Expressions.parameter( String.class, name );
+        implementor.getNodes().put( nameExpr, compressed );
+
+        final PhysType physType = PhysTypeImpl.of( implementor.getTypeFactory(), getRowType(), pref.preferArray() );
+
+        final Result leftResult = implementor.visitChild( this, 0, (EnumerableAlg) left, pref );
+        Expression leftExpression = builder.append( "left" + System.nanoTime(), leftResult.block );
+        final Result rightResult = implementor.visitChild( this, 1, (EnumerableAlg) right, pref );
+        Expression rightExpression = builder.append( "right" + System.nanoTime(), rightResult.block );
+
+        Expression result = Expressions.call(
+                BuiltInMethod.ROUTE_JOIN_FILTER.method,
+                Expressions.constant( DataContext.ROOT ),
+                preExecuteRight ? rightExpression : leftExpression,
+                leftResult.physType.generateAccessor( leftKeys ),
+                rightResult.physType.generateAccessor( rightKeys ),
+                EnumUtils.joinSelector( joinType, physType, ImmutableList.of( leftResult.physType, rightResult.physType ) ),
+                Util.first( leftResult.physType.project( leftKeys, JavaRowFormat.LIST ).comparer(), Expressions.constant( null ) ),
+                nameExpr,
+                Expressions.constant( preExecuteRight ? PRE_EXECUTE.RIGHT : PRE_EXECUTE.LEFT ) );
+        builder.add( Expressions.return_( null, builder.append( "collector_" + System.nanoTime(), result ) ) );
+
+        return implementor.result( physType, builder.toBlock() );
     }
 
 
-    public enum PRE_ROUTE {
+    public enum PRE_EXECUTE {
         LEFT,
         RIGHT
     }

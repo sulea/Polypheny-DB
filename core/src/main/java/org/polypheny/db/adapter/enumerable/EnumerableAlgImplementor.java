@@ -93,7 +93,7 @@ public class EnumerableAlgImplementor extends JavaAlgImplementor {
     private final Map<String, RexToLixTranslator.InputGetter> corrVars = new HashMap<>();
     private final Map<Object, ParameterExpression> stashedParameters = new IdentityHashMap<>();
     @Getter
-    private final Map<ParameterExpression, byte[]> nodes = new HashMap<>();
+    private final Map<ParameterExpression, Object> nodes = new HashMap<>();
 
     protected final Function1<String, RexToLixTranslator.InputGetter> allCorrelateVariables = this::getCorrelVariableGetter;
 
@@ -149,7 +149,7 @@ public class EnumerableAlgImplementor extends JavaAlgImplementor {
 
         final BlockStatement block = Expressions.block( Iterables.concat( stashed, result.block.statements ) );
         // add values
-        for ( Entry<ParameterExpression, byte[]> entry : nodes.entrySet() ) {
+        for ( Entry<ParameterExpression, Object> entry : nodes.entrySet() ) {
             memberDeclarations.add( Expressions.fieldDecl( Modifier.PRIVATE, entry.getKey(), Expressions.constant( entry.getValue() ) ) );
         }
 

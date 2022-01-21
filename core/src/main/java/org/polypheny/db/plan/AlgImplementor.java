@@ -54,7 +54,7 @@ public interface AlgImplementor {
     Conformance getConformance();
 
 
-    Map<ParameterExpression, byte[]> getNodes();
+    Map<ParameterExpression, Object> getNodes();
 
 }
 

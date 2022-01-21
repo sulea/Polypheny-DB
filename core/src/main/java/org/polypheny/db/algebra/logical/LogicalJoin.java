@@ -39,6 +39,7 @@ import com.google.common.collect.ImmutableSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import lombok.Getter;
 import org.polypheny.db.algebra.AlgInput;
 import org.polypheny.db.algebra.AlgNode;
 import org.polypheny.db.algebra.AlgShuttle;
@@ -65,6 +66,7 @@ import org.polypheny.db.rex.RexNode;
  */
 public final class LogicalJoin extends Join {
 
+    @Getter
     // NOTE jvs 14-Mar-2006:  Normally we don't use state like this to control rule firing, but due to the non-local nature of semijoin optimizations, it's pretty much required.
     private final boolean semiJoinDone;
 
@@ -150,12 +152,6 @@ public final class LogicalJoin extends Join {
     public AlgWriter explainTerms( AlgWriter pw ) {
         // Don't ever print semiJoinDone=false. This way, we don't clutter things up in optimizers that don't use semi-joins.
         return super.explainTerms( pw ).itemIf( "semiJoinDone", semiJoinDone, semiJoinDone );
-    }
-
-
-    @Override
-    public boolean isSemiJoinDone() {
-        return semiJoinDone;
     }
 
 

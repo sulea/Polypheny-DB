@@ -96,14 +96,16 @@ import org.apache.calcite.linq4j.Enumerable;
 import org.apache.calcite.linq4j.Enumerator;
 import org.apache.calcite.linq4j.Linq4j;
 import org.apache.calcite.linq4j.function.Deterministic;
+import org.apache.calcite.linq4j.function.EqualityComparer;
 import org.apache.calcite.linq4j.function.Experimental;
 import org.apache.calcite.linq4j.function.Function1;
+import org.apache.calcite.linq4j.function.Function2;
 import org.apache.calcite.linq4j.function.NonDeterministic;
 import org.apache.calcite.linq4j.tree.Primitive;
 import org.polypheny.db.PolyResult;
 import org.polypheny.db.adapter.DataContext;
 import org.polypheny.db.adapter.enumerable.EnumerableJoin.ConditionExtractor;
-import org.polypheny.db.adapter.enumerable.EnumerableJoin.PRE_ROUTE;
+import org.polypheny.db.adapter.enumerable.EnumerableJoin.PRE_EXECUTE;
 import org.polypheny.db.adapter.enumerable.JavaRowFormat;
 import org.polypheny.db.algebra.AbstractAlgNode;
 import org.polypheny.db.algebra.AlgNode;
@@ -340,9 +342,17 @@ public class Functions {
 
 
     @SuppressWarnings("unused")
-    public static Enumerable<?> routeJoinFilter( final DataContext context, final Enumerable<Object> baz, byte[] other, PRE_ROUTE preRoute ) {
+    public static Enumerable<?> routeJoinFilter(
+            final DataContext context,
+            final Enumerable<Object> baz,
+            Function1<Object, Object> ob,
+            Function1<Object, Object> ob1,
+            Function2<Object, Object, Object> ob2,
+            EqualityComparer<Object> comp,
+            String other,
+            PRE_EXECUTE preExecute ) {
         LogicalJoin join = Serializer.asDecompressedObject( other, LogicalJoin.class );
-        boolean executedRight = preRoute == PRE_ROUTE.RIGHT;
+        boolean executedRight = preExecute == PRE_EXECUTE.RIGHT;
 
         AlgBuilder builder = AlgBuilder.create( context.getStatement() );
         RexBuilder rexBuilder = builder.getRexBuilder();
@@ -350,21 +360,26 @@ public class Functions {
         join = (LogicalJoin) join.accept( new ClusterSetter( builder ) );
 
         List<Object[]> receivedValues = new ArrayList<>();
+        List<Object> originalValues = new ArrayList<>();
         boolean isMultiple = false;
         long i = 0;
         for ( Object objects : baz ) {
             if ( i > RuntimeConfig.PRE_EXECUTE_JOINS_THRESHOLD.getInteger() ) {
                 // this would produce a filter which is huge
                 // we take the L and execute the original join
+                Enumerable<Object> left = executeQuery( context, join.getLeft(), rexBuilder );
+                Enumerable<Object> right = executeQuery( context, join.getRight(), rexBuilder );
 
-                return executeQuery( context, join, rexBuilder );
+                return left.join( right, ob, ob1, ob2, comp, join.getJoinType().generatesNullsOnLeft(), join.getJoinType().generatesNullsOnRight() );
             }
 
             if ( isMultiple || objects instanceof Object[] ) {
                 receivedValues.add( (Object[]) objects );
+                originalValues.add( (Object[]) objects );
                 isMultiple = true;
             } else {
                 receivedValues.add( new Object[]{ objects } );
+                originalValues.add( new Object[]{ objects } );
             }
             i++;
         }
@@ -384,25 +399,26 @@ public class Functions {
             builder.filter( nodes.get( 0 ) );
         }
         AlgNode prepared = builder.build();
-        AlgNode left = executedRight ? prepared : join.getLeft();
+        /*AlgNode left = executedRight ? prepared : join.getLeft();
         AlgNode right = executedRight ? join.getRight() : prepared;
 
         builder.push( left );
         builder.push( right );
-        builder.join( join.getJoinType(), join.getCondition() );
+        builder.join( join.getJoinType(), join.getCondition(), true );*/
 
-        builder.getCluster().setJoinsOptimized( true );
-        return executeQuery( context, (LogicalJoin) builder.build(), rexBuilder );
+        Enumerable<Object> left = executedRight ? executeQuery( context, prepared, rexBuilder ) : Linq4j.asEnumerable( originalValues );
+        Enumerable<Object> right = executedRight ? Linq4j.asEnumerable( originalValues ) : executeQuery( context, prepared, rexBuilder );
+
+        return left.join( right, ob, ob1, ob2, comp, join.getJoinType().generatesNullsOnLeft(), join.getJoinType().generatesNullsOnRight() );
     }
 
 
-    private static Enumerable<Object> executeQuery( DataContext context, LogicalJoin join, RexBuilder rexBuilder ) {
-        join.getCluster().setJoinsOptimized( true );
+    private static Enumerable<Object> executeQuery( DataContext context, AlgNode node, RexBuilder rexBuilder ) {
         PolyResult result = context
                 .getStatement()
                 .getQueryProcessor()
                 .prepareQuery(
-                        AlgRoot.of( join, Kind.SELECT ),
+                        AlgRoot.of( node, Kind.SELECT ),
                         rexBuilder.getTypeFactory().builder().build(),
                         true,
                         true,

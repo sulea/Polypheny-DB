@@ -121,6 +121,7 @@ public class IcarusRouter extends FullPlacementQueryRouter {
             if ( newBuilders.isEmpty() ) {
                 // apparently we have a problem and no builder fits
                 cancelQuery = true;
+                log.error( "Icarus did not find a suitable builder!" );
                 return Collections.emptyList();
             }
 
