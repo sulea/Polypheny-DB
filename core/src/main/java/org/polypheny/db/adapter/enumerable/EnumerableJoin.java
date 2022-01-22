@@ -39,6 +39,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.calcite.linq4j.tree.BlockBuilder;
 import org.apache.calcite.linq4j.tree.Expression;
@@ -50,6 +51,7 @@ import org.polypheny.db.algebra.AlgNode;
 import org.polypheny.db.algebra.AlgNodes;
 import org.polypheny.db.algebra.AlgShuttleImpl;
 import org.polypheny.db.algebra.InvalidAlgException;
+import org.polypheny.db.algebra.SerializableAlgNode;
 import org.polypheny.db.algebra.core.Aggregate;
 import org.polypheny.db.algebra.core.AlgFactories;
 import org.polypheny.db.algebra.core.Calc;
@@ -62,10 +64,11 @@ import org.polypheny.db.algebra.core.JoinInfo;
 import org.polypheny.db.algebra.core.Project;
 import org.polypheny.db.algebra.core.Sort;
 import org.polypheny.db.algebra.core.TableScan;
+import org.polypheny.db.algebra.core.Union;
 import org.polypheny.db.algebra.core.Values;
 import org.polypheny.db.algebra.logical.LogicalAggregate;
 import org.polypheny.db.algebra.logical.LogicalSort;
-import org.polypheny.db.algebra.logical.LogicalTableScan.DummyTableScan;
+import org.polypheny.db.algebra.logical.LogicalTableScan.OldSerializable;
 import org.polypheny.db.algebra.metadata.AlgMdCollation;
 import org.polypheny.db.algebra.metadata.AlgMetadataQuery;
 import org.polypheny.db.config.RuntimeConfig;
@@ -255,6 +258,7 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
     }
 
 
+    @SneakyThrows
     private Result getBetterOptimizedResult( EnumerableAlgImplementor implementor, Prefer pref ) {
         log.warn( String.valueOf( left.estimateRowCount( AlgMetadataQuery.instance() ) ) );
         log.warn( String.valueOf( right.estimateRowCount( AlgMetadataQuery.instance() ) ) );
@@ -269,12 +273,9 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
             return getDefaultResult( implementor, pref );
         }
         BlockBuilder builder = new BlockBuilder();
+        SerializableAlgNode serialized = SerializableAlgNode.pack( this );
 
-        LogicalRebuilder rebuilder = new LogicalRebuilder( getCluster(), getTable() );
-        this.accept( rebuilder );
-        AlgNode rebuild = rebuilder.builder.build();
-
-        String compressed = Serializer.asCompressedByteString( rebuild );
+        String compressed = Serializer.asCompressedByteString( serialized );
 
         String name = builder.newName( "join_" + System.nanoTime() );
         ParameterExpression nameExpr = Expressions.parameter( String.class, name );
@@ -282,19 +283,20 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
 
         final PhysType physType = PhysTypeImpl.of( implementor.getTypeFactory(), getRowType(), pref.preferArray() );
 
-        final Result leftResult = implementor.visitChild( this, 0, (EnumerableAlg) left, pref );
-        Expression leftExpression = builder.append( "left" + System.nanoTime(), leftResult.block );
-        final Result rightResult = implementor.visitChild( this, 1, (EnumerableAlg) right, pref );
-        Expression rightExpression = builder.append( "right" + System.nanoTime(), rightResult.block );
+        final PhysType leftType = PhysTypeImpl.of( implementor.getTypeFactory(), left.getRowType(), pref.preferArray() );
+        final PhysType rightType = PhysTypeImpl.of( implementor.getTypeFactory(), right.getRowType(), pref.preferArray() );
+
+        final Result preResult = implementor.visitChild( this, preExecuteRight ? 1 : 0, (EnumerableAlg) (preExecuteRight ? right : left), pref );
+        Expression preExpression = builder.append( "pre" + System.nanoTime(), preResult.block );
 
         Expression result = Expressions.call(
                 BuiltInMethod.ROUTE_JOIN_FILTER.method,
                 Expressions.constant( DataContext.ROOT ),
-                preExecuteRight ? rightExpression : leftExpression,
-                leftResult.physType.generateAccessor( leftKeys ),
-                rightResult.physType.generateAccessor( rightKeys ),
-                EnumUtils.joinSelector( joinType, physType, ImmutableList.of( leftResult.physType, rightResult.physType ) ),
-                Util.first( leftResult.physType.project( leftKeys, JavaRowFormat.LIST ).comparer(), Expressions.constant( null ) ),
+                preExpression,
+                leftType.generateAccessor( leftKeys ),
+                rightType.generateAccessor( rightKeys ),
+                EnumUtils.joinSelector( joinType, physType, ImmutableList.of( leftType, rightType ) ),
+                Util.first( leftType.project( leftKeys, JavaRowFormat.LIST ).comparer(), Expressions.constant( null ) ),
                 nameExpr,
                 Expressions.constant( preExecuteRight ? PRE_EXECUTE.RIGHT : PRE_EXECUTE.LEFT ) );
         builder.add( Expressions.return_( null, builder.append( "collector_" + System.nanoTime(), result ) ) );
@@ -355,8 +357,8 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
                 this.algOptSchema = scan.getTable().getRelOptSchema();
                 this.builder = AlgFactories.LOGICAL_BUILDER.create( cluster, algOptSchema );
             }
-            //builder.scan( getLogicalTableName( scan.getTable() ) );
-            builder.push( new DummyTableScan( cluster, scan.getRowType(), scan.getTable().getQualifiedName() ) );
+            //builder.scan( scan.getTable().getQualifiedName() );
+            builder.push( new OldSerializable( scan.getRowType(), cluster, scan.getTable().getQualifiedName() ) );
             return scan;
         }
 
@@ -381,6 +383,9 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
             } else if ( other instanceof Sort ) {
                 other.getInput( 0 ).accept( this );
                 builder.push( LogicalSort.create( builder.build(), ((Sort) other).getCollation(), ((Sort) other).offset, ((Sort) other).fetch ) );
+            } else if ( other instanceof Union ) {
+                other.getInputs().forEach( i -> i.accept( this ) );
+                builder.union( ((Union) other).all );
             } else if ( other instanceof Aggregate ) {
                 other.getInput( 0 ).accept( this );
                 builder.push( new LogicalAggregate(

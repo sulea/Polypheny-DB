@@ -34,10 +34,16 @@
 package org.polypheny.db.algebra.logical;
 
 
+import java.io.IOException;
+import java.io.ObjectInput;
+import java.io.ObjectOutput;
 import java.util.List;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 import org.polypheny.db.algebra.AlgInput;
 import org.polypheny.db.algebra.AlgNode;
 import org.polypheny.db.algebra.AlgShuttle;
+import org.polypheny.db.algebra.SerializableAlgNode;
 import org.polypheny.db.algebra.core.Union;
 import org.polypheny.db.plan.AlgOptCluster;
 import org.polypheny.db.plan.AlgTraitSet;
@@ -87,6 +93,40 @@ public final class LogicalUnion extends Union {
     @Override
     public AlgNode accept( AlgShuttle shuttle ) {
         return shuttle.visit( this );
+    }
+
+
+    @Getter
+    @NoArgsConstructor
+    public static class SerializableUnion extends SerializableAlgNode {
+
+        private boolean all;
+
+
+        public SerializableUnion( boolean all ) {
+            this.all = all;
+        }
+
+
+        @Override
+        public void writeExternal( ObjectOutput out ) throws IOException {
+            out.writeBoolean( all );
+            out.writeObject( getInputs().get( 0 ) );
+        }
+
+
+        @Override
+        public void readExternal( ObjectInput in ) throws IOException, ClassNotFoundException {
+            all = in.readBoolean();
+            addInput( (SerializableAlgNode) in.readObject() );
+        }
+
+
+        @Override
+        public void accept( SerializableActivator activator ) {
+            activator.visit( this );
+        }
+
     }
 
 }

@@ -29,6 +29,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import lombok.Getter;
 import lombok.NonNull;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.polypheny.db.PolyResult;
 import org.polypheny.db.adapter.Adapter;
@@ -92,7 +93,8 @@ public class TransactionImpl implements Transaction, Comparable<Object> {
     private final MultimediaFlavor flavor;
 
     @Getter
-    private final boolean analyze;
+    @Setter
+    private boolean analyze;
 
     private final List<Statement> statements = new ArrayList<>();
 

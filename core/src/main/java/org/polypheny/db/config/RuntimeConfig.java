@@ -134,7 +134,7 @@ public enum RuntimeConfig {
             "Commute joins in planner.",
             false,
             ConfigType.BOOLEAN,
-            "planningGroup" ),
+            "joinsGroup" ),
 
     VALIDATE_MM_CONTENT_TYPE(
             "validation/validateMultimediaContentType",
@@ -318,14 +318,14 @@ public enum RuntimeConfig {
             "Whether joins should be pre-executed to generate a filter on top of the other side.",
             true,
             ConfigType.BOOLEAN,
-            "queryParameterizationGroup" ),
+            "joinsGroup" ),
 
     PRE_EXECUTE_JOINS_THRESHOLD(
             "runtime/preExecuteJoinsThreshold",
             "How many values should maximally used to create a join filter, if this is reached a normal join is used.",
             10000,
             ConfigType.INTEGER,
-            "queryParameterizationGroup"
+            "joinsGroup"
     ),
 
     PARAMETERIZE_INTERVALS(
@@ -449,9 +449,12 @@ public enum RuntimeConfig {
         validationGroup.withTitle( "Query Validation" );
         final WebUiGroup executionGroup = new WebUiGroup( "processingExecutionGroup", processingPage.getId() );
         executionGroup.withTitle( "Query Execution" );
+        final WebUiGroup joinsGroup = new WebUiGroup( "joinsGroup", processingPage.getId() );
+        joinsGroup.withTitle( "Joins Adjustments" );
         configManager.registerWebUiPage( processingPage );
         configManager.registerWebUiGroup( parsingGroup );
         configManager.registerWebUiGroup( planningGroup );
+        configManager.registerWebUiGroup( joinsGroup );
         configManager.registerWebUiGroup( implementationCachingGroup );
         configManager.registerWebUiGroup( queryParameterizationGroup );
         configManager.registerWebUiGroup( constraintEnforcementGroup );

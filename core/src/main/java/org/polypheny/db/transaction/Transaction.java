@@ -60,6 +60,8 @@ public interface Transaction {
 
     boolean isAnalyze();
 
+    void setAnalyze( boolean analyze );
+
     InformationManager getQueryAnalyzer();
 
     AtomicBoolean getCancelFlag();

@@ -23,10 +23,32 @@ import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterOutputStream;
 import org.apache.calcite.avatica.util.ByteString;
 import org.nustaq.serialization.FSTConfiguration;
+import org.polypheny.db.algebra.logical.LogicalAggregate.SerializableAggregate;
+import org.polypheny.db.algebra.logical.LogicalFilter.SerializableFilter;
+import org.polypheny.db.algebra.logical.LogicalJoin.SerializableJoin;
+import org.polypheny.db.algebra.logical.LogicalProject.SerializableProject;
+import org.polypheny.db.algebra.logical.LogicalSort.SerializableSort;
+import org.polypheny.db.algebra.logical.LogicalTableScan.SerializableTableScan;
+import org.polypheny.db.algebra.logical.LogicalUnion.SerializableUnion;
+import org.polypheny.db.algebra.logical.LogicalValues.SerializableValues;
 
 public class Serializer {
 
     public static final FSTConfiguration conf = FSTConfiguration.createDefaultConfiguration();
+
+
+    static {
+        conf.registerClass(
+                SerializableTableScan.class,
+                SerializableJoin.class,
+                SerializableAggregate.class,
+                SerializableFilter.class,
+                SerializableJoin.class,
+                SerializableSort.class,
+                SerializableProject.class,
+                SerializableUnion.class,
+                SerializableValues.class );
+    }
 
 
     public static byte[] compress( byte[] in ) {

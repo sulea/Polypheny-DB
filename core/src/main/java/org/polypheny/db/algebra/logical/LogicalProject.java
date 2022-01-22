@@ -34,13 +34,19 @@
 package org.polypheny.db.algebra.logical;
 
 
+import java.io.IOException;
+import java.io.ObjectInput;
+import java.io.ObjectOutput;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 import org.polypheny.db.algebra.AlgCollationTraitDef;
 import org.polypheny.db.algebra.AlgInput;
 import org.polypheny.db.algebra.AlgNode;
 import org.polypheny.db.algebra.AlgShuttle;
+import org.polypheny.db.algebra.SerializableAlgNode;
 import org.polypheny.db.algebra.core.Project;
 import org.polypheny.db.algebra.metadata.AlgMdCollation;
 import org.polypheny.db.algebra.metadata.AlgMetadataQuery;
@@ -129,6 +135,50 @@ public final class LogicalProject extends Project {
     @Override
     public AlgNode accept( AlgShuttle shuttle ) {
         return shuttle.visit( this );
+    }
+
+
+    @Getter
+    @NoArgsConstructor
+    public static class SerializableProject extends SerializableAlgNode {
+
+        private List<RexNode> projects;
+        private List<String> names;
+
+
+        public SerializableProject( List<RexNode> projects ) {
+            this( projects, null );
+        }
+
+
+        public SerializableProject( List<RexNode> projects, List<String> names ) {
+            this.projects = projects;
+            this.names = names;
+        }
+
+
+        @Override
+        public void writeExternal( ObjectOutput out ) throws IOException {
+            out.writeObject( projects );
+            out.writeObject( names );
+            out.writeObject( getInputs().get( 0 ) );
+        }
+
+
+        @SuppressWarnings("unchecked")
+        @Override
+        public void readExternal( ObjectInput in ) throws IOException, ClassNotFoundException {
+            projects = (List<RexNode>) in.readObject();
+            names = (List<String>) in.readObject();
+            addInput( (SerializableAlgNode) in.readObject() );
+        }
+
+
+        @Override
+        public void accept( SerializableActivator activator ) {
+            activator.visit( this );
+        }
+
     }
 
 }

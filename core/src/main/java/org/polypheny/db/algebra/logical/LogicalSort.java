@@ -34,11 +34,17 @@
 package org.polypheny.db.algebra.logical;
 
 
+import java.io.IOException;
+import java.io.ObjectInput;
+import java.io.ObjectOutput;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 import org.polypheny.db.algebra.AlgCollation;
 import org.polypheny.db.algebra.AlgCollationTraitDef;
 import org.polypheny.db.algebra.AlgInput;
 import org.polypheny.db.algebra.AlgNode;
 import org.polypheny.db.algebra.AlgShuttle;
+import org.polypheny.db.algebra.SerializableAlgNode;
 import org.polypheny.db.algebra.core.Sort;
 import org.polypheny.db.plan.AlgOptCluster;
 import org.polypheny.db.plan.AlgTraitSet;
@@ -90,6 +96,62 @@ public final class LogicalSort extends Sort {
     @Override
     public AlgNode accept( AlgShuttle shuttle ) {
         return shuttle.visit( this );
+    }
+
+
+    @Getter
+    @NoArgsConstructor
+    public static class SerializableSort extends SerializableAlgNode {
+
+        private boolean usesOffset;
+        private boolean usesFetch;
+        private long offset;
+        private long fetch;
+        private AlgCollation collation;
+        private boolean onlyLimit;
+
+
+        public SerializableSort( long offset, long fetch ) {
+            this( null, offset, fetch );
+        }
+
+
+        public SerializableSort( AlgCollation collation, long offset, long fetch ) {
+            this.usesOffset = offset >= 0;
+            this.usesFetch = fetch >= 0;
+            this.offset = offset;
+            this.fetch = fetch;
+            this.collation = collation;
+            this.onlyLimit = collation != null;
+        }
+
+
+        @Override
+        public void writeExternal( ObjectOutput out ) throws IOException {
+            out.writeLong( offset );
+            out.writeLong( fetch );
+            out.writeObject( collation );
+            out.writeObject( getInputs().get( 0 ) );
+        }
+
+
+        @Override
+        public void readExternal( ObjectInput in ) throws IOException, ClassNotFoundException {
+            this.offset = in.readLong();
+            this.fetch = in.readLong();
+            this.collation = (AlgCollation) in.readObject();
+            this.usesFetch = fetch != -1;
+            this.usesOffset = offset != -1;
+            this.onlyLimit = collation != null;
+            addInput( (SerializableAlgNode) in.readObject() );
+        }
+
+
+        @Override
+        public void accept( SerializableActivator activator ) {
+            activator.visit( this );
+        }
+
     }
 
 }

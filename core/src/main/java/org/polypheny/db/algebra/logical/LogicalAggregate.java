@@ -34,10 +34,17 @@
 package org.polypheny.db.algebra.logical;
 
 
+import com.google.common.collect.ImmutableList;
+import java.io.IOException;
+import java.io.ObjectInput;
+import java.io.ObjectOutput;
 import java.util.List;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 import org.polypheny.db.algebra.AlgInput;
 import org.polypheny.db.algebra.AlgNode;
 import org.polypheny.db.algebra.AlgShuttle;
+import org.polypheny.db.algebra.SerializableAlgNode;
 import org.polypheny.db.algebra.core.Aggregate;
 import org.polypheny.db.algebra.core.AggregateCall;
 import org.polypheny.db.algebra.rules.AggregateProjectPullUpConstantsRule;
@@ -116,6 +123,53 @@ public final class LogicalAggregate extends Aggregate {
     @Override
     public AlgNode accept( AlgShuttle shuttle ) {
         return shuttle.visit( this );
+    }
+
+
+    @Getter
+    @NoArgsConstructor
+    static public class SerializableAggregate extends SerializableAlgNode {
+
+        private boolean indicator;
+        private ImmutableBitSet groupSet;
+        private ImmutableList<ImmutableBitSet> groupSets;
+        private List<AggregateCall> aggCallList;
+
+
+        public SerializableAggregate( boolean indicator, ImmutableBitSet groupSet, ImmutableList<ImmutableBitSet> groupSets, List<AggregateCall> aggCallList ) {
+            this.indicator = indicator;
+            this.groupSet = groupSet;
+            this.groupSets = groupSets;
+            this.aggCallList = aggCallList;
+        }
+
+
+        @Override
+        public void writeExternal( ObjectOutput out ) throws IOException {
+            out.writeBoolean( indicator );
+            out.writeObject( groupSet );
+            out.writeObject( groupSets );
+            out.writeObject( aggCallList );
+            out.writeObject( getInputs().get( 0 ) );
+        }
+
+
+        @SuppressWarnings("unchecked")
+        @Override
+        public void readExternal( ObjectInput in ) throws IOException, ClassNotFoundException {
+            indicator = in.readBoolean();
+            groupSet = (ImmutableBitSet) in.readObject();
+            groupSets = (ImmutableList<ImmutableBitSet>) in.readObject();
+            aggCallList = (List<AggregateCall>) in.readObject();
+            addInput( (SerializableAlgNode) in.readObject() );
+        }
+
+
+        @Override
+        public void accept( SerializableActivator activator ) {
+            activator.visit( this );
+        }
+
     }
 
 }

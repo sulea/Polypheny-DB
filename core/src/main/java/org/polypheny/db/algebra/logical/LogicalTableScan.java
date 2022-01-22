@@ -35,12 +35,17 @@ package org.polypheny.db.algebra.logical;
 
 
 import com.google.common.collect.ImmutableList;
+import java.io.IOException;
+import java.io.ObjectInput;
+import java.io.ObjectOutput;
 import java.util.List;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import org.polypheny.db.algebra.AbstractAlgNode;
 import org.polypheny.db.algebra.AlgCollationTraitDef;
 import org.polypheny.db.algebra.AlgInput;
 import org.polypheny.db.algebra.AlgNode;
+import org.polypheny.db.algebra.SerializableAlgNode;
 import org.polypheny.db.algebra.core.TableScan;
 import org.polypheny.db.algebra.type.AlgDataType;
 import org.polypheny.db.plan.AlgOptCluster;
@@ -124,9 +129,8 @@ public final class LogicalTableScan extends TableScan {
     }
 
 
-    public static class DummyTableScan extends AbstractAlgNode {
+    public static class OldSerializable extends AbstractAlgNode {
 
-        @Getter
         private final List<String> names;
 
 
@@ -134,9 +138,8 @@ public final class LogicalTableScan extends TableScan {
          * Creates an <code>AbstractRelNode</code>.
          *
          * @param cluster
-         * @param rowType mirrored rowtype of original {@link }
          */
-        public DummyTableScan( AlgOptCluster cluster, AlgDataType rowType, List<String> names ) {
+        public OldSerializable( AlgDataType rowType, AlgOptCluster cluster, List<String> names ) {
             super( cluster, AlgTraitSet.createEmpty() );
             this.rowType = rowType;
             this.names = names;
@@ -145,7 +148,43 @@ public final class LogicalTableScan extends TableScan {
 
         @Override
         public String algCompareString() {
-            throw new RuntimeException( "This is a dummy node only for serializing and should not be cached." );
+            return null;
+        }
+
+    }
+
+
+    @NoArgsConstructor
+    public static class SerializableTableScan extends SerializableAlgNode {
+
+        @Getter
+        private List<String> names;
+
+
+        /**
+         * Creates an <code>AbstractRelNode</code>.
+         */
+        public SerializableTableScan( List<String> names ) {
+            this.names = names;
+        }
+
+
+        @Override
+        public void writeExternal( ObjectOutput out ) throws IOException {
+            out.writeObject( names );
+        }
+
+
+        @SuppressWarnings("unchecked")
+        @Override
+        public void readExternal( ObjectInput in ) throws IOException, ClassNotFoundException {
+            names = (List<String>) in.readObject();
+        }
+
+
+        @Override
+        public void accept( SerializableActivator activator ) {
+            activator.visit( this );
         }
 
     }

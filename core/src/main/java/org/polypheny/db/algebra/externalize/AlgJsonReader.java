@@ -44,11 +44,10 @@ import java.util.AbstractList;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import org.apache.commons.lang3.StringUtils;
+import lombok.SneakyThrows;
 import org.polypheny.db.algebra.AlgCollation;
 import org.polypheny.db.algebra.AlgCollations;
 import org.polypheny.db.algebra.AlgDistribution;
@@ -116,7 +115,7 @@ public class AlgJsonReader {
 
     private void readAlg( final Map<String, Object> jsonAlg ) {
         String id = (String) jsonAlg.get( "id" );
-        String type = (String) jsonAlg.get( "algOp" );
+        String type = (String) jsonAlg.get( "relOp" );
         Constructor constructor = algJson.getConstructor( type );
         AlgInput input = new AlgInput() {
             @Override
@@ -138,9 +137,9 @@ public class AlgJsonReader {
                     String str = (String) jsonAlg.get( table );
                     // MV: This is not a nice solution...
                     if ( str.startsWith( "[" ) && str.endsWith( "]" ) ) {
-                        str = str.substring( 1, str.length() - 1 );
-                        list = new LinkedList<>();
-                        list.add( StringUtils.join( Arrays.asList( str.split( "," ) ), ", " ) );
+                        str = str.substring( 1, str.length() - 1 ).replace( " ", "" );
+                        list = Arrays.asList( str.split( "," ) );
+                        //list.add( Arrays.asList( str.split( "," ) ) );
                     } else {
                         list = getStringList( table );
                     }
@@ -199,10 +198,22 @@ public class AlgJsonReader {
             }
 
 
+            @SneakyThrows
             @Override
             public List<String> getStringList( String tag ) {
-                //noinspection unchecked
-                return (List<String>) jsonAlg.get( tag );
+                Object obj = jsonAlg.get( tag );
+                if ( obj instanceof List ) {
+                    //noinspection unchecked
+                    return (List<String>) obj;
+                } else if ( obj instanceof String ) {
+                    final ObjectMapper mapper = new ObjectMapper();
+                    List o = mapper.readValue( (String) obj, List.class );
+                    return Arrays.asList( "test" );
+                } else {
+                    throw new RuntimeException( "Was not able to parse list in string." );
+                }
+
+
             }
 
 
@@ -264,7 +275,7 @@ public class AlgJsonReader {
 
             @Override
             public List<RexNode> getExpressionList( String tag ) {
-                @SuppressWarnings("unchecked") final List<Object> jsonNodes = (List) jsonAlg.get( tag );
+                @SuppressWarnings("unchecked") final List<Object> jsonNodes = (List) getStringList( tag );
                 final List<RexNode> nodes = new ArrayList<>();
                 for ( Object jsonNode : jsonNodes ) {
                     nodes.add( algJson.toRex( this, jsonNode ) );

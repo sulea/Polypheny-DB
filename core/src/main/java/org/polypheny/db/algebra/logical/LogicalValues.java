@@ -35,16 +35,23 @@ package org.polypheny.db.algebra.logical;
 
 
 import com.google.common.collect.ImmutableList;
+import java.io.IOException;
+import java.io.ObjectInput;
+import java.io.ObjectOutput;
 import java.math.BigDecimal;
 import java.util.List;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 import org.polypheny.db.algebra.AlgCollationTraitDef;
 import org.polypheny.db.algebra.AlgInput;
 import org.polypheny.db.algebra.AlgNode;
 import org.polypheny.db.algebra.AlgShuttle;
+import org.polypheny.db.algebra.SerializableAlgNode;
 import org.polypheny.db.algebra.core.Values;
 import org.polypheny.db.algebra.metadata.AlgMdCollation;
 import org.polypheny.db.algebra.metadata.AlgMetadataQuery;
 import org.polypheny.db.algebra.type.AlgDataType;
+import org.polypheny.db.algebra.type.AlgRecordType;
 import org.polypheny.db.plan.AlgOptCluster;
 import org.polypheny.db.plan.AlgTraitSet;
 import org.polypheny.db.plan.Convention;
@@ -129,6 +136,43 @@ public class LogicalValues extends Values {
     @Override
     public AlgNode accept( AlgShuttle shuttle ) {
         return shuttle.visit( this );
+    }
+
+
+    @Getter
+    @NoArgsConstructor
+    public static class SerializableValues extends SerializableAlgNode {
+
+        private AlgRecordType rowType;
+        private ImmutableList<ImmutableList<RexLiteral>> tuples;
+
+
+        public SerializableValues( AlgRecordType rowType, ImmutableList<ImmutableList<RexLiteral>> tuples ) {
+            this.rowType = rowType;
+            this.tuples = tuples;
+        }
+
+
+        @Override
+        public void writeExternal( ObjectOutput out ) throws IOException {
+            out.writeObject( rowType );
+            out.writeObject( tuples );
+        }
+
+
+        @SuppressWarnings("unchecked")
+        @Override
+        public void readExternal( ObjectInput in ) throws IOException, ClassNotFoundException {
+            this.rowType = (AlgRecordType) in.readObject();
+            this.tuples = (ImmutableList<ImmutableList<RexLiteral>>) in.readObject();
+        }
+
+
+        @Override
+        public void accept( SerializableActivator activator ) {
+            activator.visit( this );
+        }
+
     }
 
 }

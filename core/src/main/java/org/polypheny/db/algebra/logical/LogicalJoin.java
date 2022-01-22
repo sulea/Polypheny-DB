@@ -36,14 +36,19 @@ package org.polypheny.db.algebra.logical;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import java.io.IOException;
+import java.io.ObjectInput;
+import java.io.ObjectOutput;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import org.polypheny.db.algebra.AlgInput;
 import org.polypheny.db.algebra.AlgNode;
 import org.polypheny.db.algebra.AlgShuttle;
 import org.polypheny.db.algebra.AlgWriter;
+import org.polypheny.db.algebra.SerializableAlgNode;
 import org.polypheny.db.algebra.core.CorrelationId;
 import org.polypheny.db.algebra.core.Join;
 import org.polypheny.db.algebra.core.JoinAlgType;
@@ -158,6 +163,46 @@ public final class LogicalJoin extends Join {
     @Override
     public List<AlgDataTypeField> getSystemFieldList() {
         return systemFieldList;
+    }
+
+
+    @Getter
+    @NoArgsConstructor
+    public static class SerializableJoin extends SerializableAlgNode {
+
+        private JoinAlgType joinType;
+        private RexNode condition;
+
+
+        public SerializableJoin( JoinAlgType joinType, RexNode condition ) {
+            this.joinType = joinType;
+            this.condition = condition;
+        }
+
+
+        @Override
+        public void writeExternal( ObjectOutput out ) throws IOException {
+            out.writeObject( joinType );
+            out.writeObject( condition );
+            out.writeObject( this.getInputs().get( 0 ) );
+            out.writeObject( this.getInputs().get( 1 ) );
+        }
+
+
+        @Override
+        public void readExternal( ObjectInput in ) throws IOException, ClassNotFoundException {
+            joinType = (JoinAlgType) in.readObject();
+            condition = (RexNode) in.readObject();
+            addInput( (SerializableAlgNode) in.readObject() );
+            addInput( (SerializableAlgNode) in.readObject() );
+        }
+
+
+        @Override
+        public void accept( SerializableActivator activator ) {
+            activator.visit( this );
+        }
+
     }
 
 }

@@ -35,13 +35,19 @@ package org.polypheny.db.algebra.logical;
 
 
 import com.google.common.collect.ImmutableSet;
+import java.io.IOException;
+import java.io.ObjectInput;
+import java.io.ObjectOutput;
 import java.util.Objects;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 import org.polypheny.db.algebra.AlgCollationTraitDef;
 import org.polypheny.db.algebra.AlgDistributionTraitDef;
 import org.polypheny.db.algebra.AlgInput;
 import org.polypheny.db.algebra.AlgNode;
 import org.polypheny.db.algebra.AlgShuttle;
 import org.polypheny.db.algebra.AlgWriter;
+import org.polypheny.db.algebra.SerializableAlgNode;
 import org.polypheny.db.algebra.core.CorrelationId;
 import org.polypheny.db.algebra.core.Filter;
 import org.polypheny.db.algebra.metadata.AlgMdCollation;
@@ -131,6 +137,40 @@ public final class LogicalFilter extends Filter {
     @Override
     public AlgWriter explainTerms( AlgWriter pw ) {
         return super.explainTerms( pw ).itemIf( "variablesSet", variablesSet, !variablesSet.isEmpty() );
+    }
+
+
+    @Getter
+    @NoArgsConstructor
+    public static class SerializableFilter extends SerializableAlgNode {
+
+        private RexNode condition;
+
+
+        public SerializableFilter( RexNode condition ) {
+            this.condition = condition;
+        }
+
+
+        @Override
+        public void writeExternal( ObjectOutput out ) throws IOException {
+            out.writeObject( condition );
+            out.writeObject( getInputs().get( 0 ) );
+        }
+
+
+        @Override
+        public void readExternal( ObjectInput in ) throws IOException, ClassNotFoundException {
+            condition = (RexNode) in.readObject();
+            addInput( (SerializableAlgNode) in.readObject() );
+        }
+
+
+        @Override
+        public void accept( SerializableActivator activator ) {
+            activator.visit( this );
+        }
+
     }
 
 }

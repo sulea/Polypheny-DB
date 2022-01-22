@@ -107,34 +107,17 @@ import org.polypheny.db.adapter.DataContext;
 import org.polypheny.db.adapter.enumerable.EnumerableJoin.ConditionExtractor;
 import org.polypheny.db.adapter.enumerable.EnumerableJoin.PRE_EXECUTE;
 import org.polypheny.db.adapter.enumerable.JavaRowFormat;
-import org.polypheny.db.algebra.AbstractAlgNode;
 import org.polypheny.db.algebra.AlgNode;
 import org.polypheny.db.algebra.AlgRoot;
-import org.polypheny.db.algebra.AlgShuttleImpl;
 import org.polypheny.db.algebra.constant.Kind;
-import org.polypheny.db.algebra.core.TableFunctionScan;
-import org.polypheny.db.algebra.core.TableScan;
 import org.polypheny.db.algebra.exceptions.ConstraintViolationException;
 import org.polypheny.db.algebra.json.JsonConstructorNullClause;
 import org.polypheny.db.algebra.json.JsonExistsErrorBehavior;
 import org.polypheny.db.algebra.json.JsonQueryEmptyOrErrorBehavior;
 import org.polypheny.db.algebra.json.JsonQueryWrapperBehavior;
 import org.polypheny.db.algebra.json.JsonValueEmptyOrErrorBehavior;
-import org.polypheny.db.algebra.logical.LogicalAggregate;
-import org.polypheny.db.algebra.logical.LogicalConditionalExecute;
-import org.polypheny.db.algebra.logical.LogicalConstraintEnforcer;
-import org.polypheny.db.algebra.logical.LogicalCorrelate;
-import org.polypheny.db.algebra.logical.LogicalExchange;
-import org.polypheny.db.algebra.logical.LogicalFilter;
-import org.polypheny.db.algebra.logical.LogicalIntersect;
 import org.polypheny.db.algebra.logical.LogicalJoin;
-import org.polypheny.db.algebra.logical.LogicalMatch;
-import org.polypheny.db.algebra.logical.LogicalMinus;
-import org.polypheny.db.algebra.logical.LogicalProject;
-import org.polypheny.db.algebra.logical.LogicalSort;
-import org.polypheny.db.algebra.logical.LogicalTableScan.DummyTableScan;
-import org.polypheny.db.algebra.logical.LogicalUnion;
-import org.polypheny.db.algebra.logical.LogicalValues;
+import org.polypheny.db.algebra.logical.LogicalJoin.SerializableJoin;
 import org.polypheny.db.algebra.operators.OperatorName;
 import org.polypheny.db.algebra.type.AlgDataType;
 import org.polypheny.db.algebra.type.AlgDataTypeField;
@@ -142,8 +125,6 @@ import org.polypheny.db.algebra.type.AlgDataTypeSystem;
 import org.polypheny.db.config.RuntimeConfig;
 import org.polypheny.db.interpreter.Row;
 import org.polypheny.db.languages.OperatorRegistry;
-import org.polypheny.db.plan.AlgOptCluster;
-import org.polypheny.db.plan.AlgTraitSet;
 import org.polypheny.db.rex.RexBuilder;
 import org.polypheny.db.rex.RexNode;
 import org.polypheny.db.runtime.FlatLists.ComparableList;
@@ -342,7 +323,7 @@ public class Functions {
 
 
     @SuppressWarnings("unused")
-    public static Enumerable<?> routeJoinFilter(
+    public static Enumerable<?> preExecuteJoinFilter(
             final DataContext context,
             final Enumerable<Object> baz,
             Function1<Object, Object> ob,
@@ -351,36 +332,46 @@ public class Functions {
             EqualityComparer<Object> comp,
             String other,
             PRE_EXECUTE preExecute ) {
-        LogicalJoin join = Serializer.asDecompressedObject( other, LogicalJoin.class );
-        boolean executedRight = preExecute == PRE_EXECUTE.RIGHT;
+        context.getStatement().getTransaction().setAnalyze( false );
 
         AlgBuilder builder = AlgBuilder.create( context.getStatement() );
         RexBuilder rexBuilder = builder.getRexBuilder();
-
-        join = (LogicalJoin) join.accept( new ClusterSetter( builder ) );
+        SerializableJoin serializableJoin = Serializer.asDecompressedObject( other, SerializableJoin.class );
+        LogicalJoin join = (LogicalJoin) serializableJoin.unpack( builder );
+        boolean executedRight = preExecute == PRE_EXECUTE.RIGHT;
 
         List<Object[]> receivedValues = new ArrayList<>();
         List<Object> originalValues = new ArrayList<>();
         boolean isMultiple = false;
         long i = 0;
-        for ( Object objects : baz ) {
+
+        Iterator<Object> iter = baz.iterator();
+        while ( iter.hasNext() ) {
+            Object objects = iter.next();
+
+            if ( isMultiple || objects instanceof Object[] ) {
+                receivedValues.add( (Object[]) objects );
+                isMultiple = true;
+            } else {
+                receivedValues.add( new Object[]{ objects } );
+            }
+            originalValues.add( objects );
+
             if ( i > RuntimeConfig.PRE_EXECUTE_JOINS_THRESHOLD.getInteger() ) {
                 // this would produce a filter which is huge
                 // we take the L and execute the original join
-                Enumerable<Object> left = executeQuery( context, join.getLeft(), rexBuilder );
-                Enumerable<Object> right = executeQuery( context, join.getRight(), rexBuilder );
+                // we can rebuild the "original" enumerable by concatenating
+                Enumerable<Object> mergedEnumerable = Linq4j.concat( Arrays.asList( Linq4j.asEnumerable( originalValues ), Linq4j.asEnumerable( () -> iter ) ) );
+                Enumerable<Object> left = executedRight
+                        ? executeQuery( context, join.getLeft(), rexBuilder )
+                        : mergedEnumerable;
+                Enumerable<Object> right = executedRight
+                        ? mergedEnumerable
+                        : executeQuery( context, join.getRight(), rexBuilder );
 
                 return left.join( right, ob, ob1, ob2, comp, join.getJoinType().generatesNullsOnLeft(), join.getJoinType().generatesNullsOnRight() );
             }
 
-            if ( isMultiple || objects instanceof Object[] ) {
-                receivedValues.add( (Object[]) objects );
-                originalValues.add( (Object[]) objects );
-                isMultiple = true;
-            } else {
-                receivedValues.add( new Object[]{ objects } );
-                originalValues.add( new Object[]{ objects } );
-            }
             i++;
         }
 
@@ -399,12 +390,6 @@ public class Functions {
             builder.filter( nodes.get( 0 ) );
         }
         AlgNode prepared = builder.build();
-        /*AlgNode left = executedRight ? prepared : join.getLeft();
-        AlgNode right = executedRight ? join.getRight() : prepared;
-
-        builder.push( left );
-        builder.push( right );
-        builder.join( join.getJoinType(), join.getCondition(), true );*/
 
         Enumerable<Object> left = executedRight ? executeQuery( context, prepared, rexBuilder ) : Linq4j.asEnumerable( originalValues );
         Enumerable<Object> right = executedRight ? Linq4j.asEnumerable( originalValues ) : executeQuery( context, prepared, rexBuilder );
@@ -458,155 +443,6 @@ public class Functions {
                 i++;
             }
         }
-    }
-
-
-    public static class ClusterSetter extends AlgShuttleImpl {
-
-        private final AlgOptCluster cluster;
-        private final AlgBuilder builder;
-
-
-        public ClusterSetter( AlgBuilder builder ) {
-            this.cluster = builder.getCluster();
-            this.cluster.setJoinsOptimized( true );
-            this.builder = builder;
-        }
-
-
-        @Override
-        public AlgNode visit( LogicalAggregate aggregate ) {
-            setCluster( aggregate, cluster );
-            return super.visit( aggregate );
-        }
-
-
-        @Override
-        public AlgNode visit( LogicalMatch match ) {
-            setCluster( match, cluster );
-            return super.visit( match );
-        }
-
-
-        @Override
-        public AlgNode visit( TableScan scan ) {
-            setCluster( scan, cluster );
-            return super.visit( scan );
-        }
-
-
-        @Override
-        public AlgNode visit( TableFunctionScan scan ) {
-            setCluster( scan, cluster );
-            return super.visit( scan );
-        }
-
-
-        @Override
-        public AlgNode visit( LogicalValues values ) {
-            setCluster( values, cluster );
-            return super.visit( values );
-        }
-
-
-        @Override
-        public AlgNode visit( LogicalFilter filter ) {
-            setCluster( filter, cluster );
-            return super.visit( filter );
-        }
-
-
-        @Override
-        public AlgNode visit( LogicalProject project ) {
-            setCluster( project, cluster );
-            return super.visit( project );
-        }
-
-
-        @Override
-        public AlgNode visit( LogicalJoin join ) {
-            setCluster( join, cluster );
-            return super.visit( join );
-        }
-
-
-        @Override
-        public AlgNode visit( LogicalCorrelate correlate ) {
-            setCluster( correlate, cluster );
-            return super.visit( correlate );
-        }
-
-
-        @Override
-        public AlgNode visit( LogicalUnion union ) {
-            setCluster( union, cluster );
-            return super.visit( union );
-        }
-
-
-        @Override
-        public AlgNode visit( LogicalIntersect intersect ) {
-            setCluster( intersect, cluster );
-            return super.visit( intersect );
-        }
-
-
-        @Override
-        public AlgNode visit( LogicalMinus minus ) {
-            setCluster( minus, cluster );
-            return super.visit( minus );
-        }
-
-
-        @Override
-        public AlgNode visit( LogicalSort sort ) {
-            setCluster( sort, cluster );
-            return super.visit( sort );
-        }
-
-
-        @Override
-        public AlgNode visit( LogicalExchange exchange ) {
-            setCluster( exchange, cluster );
-            return super.visit( exchange );
-        }
-
-
-        @Override
-        public AlgNode visit( LogicalConditionalExecute lce ) {
-            setCluster( lce, cluster );
-            return super.visit( lce );
-        }
-
-
-        @Override
-        public AlgNode visit( LogicalConstraintEnforcer enforcer ) {
-            setCluster( enforcer, cluster );
-            return super.visit( enforcer );
-        }
-
-
-        @Override
-        public AlgNode visit( AlgNode other ) {
-            if ( other instanceof DummyTableScan ) {
-                return builder.scan( ((DummyTableScan) other).getNames() ).build();
-            }
-
-            setCluster( (AbstractAlgNode) other, cluster );
-            return super.visit( other );
-        }
-
-
-        private void setCluster( AbstractAlgNode other, AlgOptCluster cluster ) {
-            if ( other.getTraitSet().size() > 2 ) {
-                throw new RuntimeException( "This TraitSet constellation was not considered." );
-            }
-            AlgTraitSet set = cluster.traitSet();
-            set = set.replace( 1, other.getTraitSet().get( 1 ) );
-            other.setTraitSet( set );
-            other.setCluster( cluster );
-        }
-
     }
 
 
