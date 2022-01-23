@@ -323,7 +323,7 @@ public enum RuntimeConfig {
     PRE_EXECUTE_JOINS_THRESHOLD(
             "runtime/preExecuteJoinsThreshold",
             "How many values should maximally used to create a join filter, if this is reached a normal join is used.",
-            10000,
+            1000,
             ConfigType.INTEGER,
             "joinsGroup"
     ),
@@ -331,7 +331,7 @@ public enum RuntimeConfig {
     PRE_EXECUTE_JOINS_TO_CONTEXT(
             "runtime/preExecuteJoinsToContext",
             "If the generated filter should only consist of dynamic parameters and the values stored in the context.",
-            true,
+            false,
             ConfigType.BOOLEAN,
             "joinsGroup"
     ),
