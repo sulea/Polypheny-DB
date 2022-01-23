@@ -40,7 +40,6 @@ import com.drew.metadata.Directory;
 import com.drew.metadata.Metadata;
 import com.drew.metadata.Tag;
 import com.google.common.base.Joiner;
-import com.google.common.base.Stopwatch;
 import com.google.gson.Gson;
 import com.jayway.jsonpath.Configuration;
 import com.jayway.jsonpath.DocumentContext;
@@ -338,19 +337,13 @@ public class Functions {
             byte[] other,
             PRE_EXECUTE preExecute ) {
         context.getStatement().getTransaction().setAnalyze( false );
-        long id = idBuilder.getAndIncrement();
-        Stopwatch stopwatch = Stopwatch.createStarted();
+
         AlgBuilder builder = AlgBuilder.create( context.getStatement() );
         RexBuilder rexBuilder = builder.getRexBuilder();
         //SerializableJoin serializableJoin = PolySerializer.asDecompressedObject( other, SerializableJoin.class );
         SerializableJoin serializableJoin = PolySerializer.deserializeAndCompress( other, SerializableJoin.class );
-        log.warn( stopwatch.stop() + ":" + id );
-        stopwatch.reset();
-        stopwatch.start();
         LogicalJoin join = (LogicalJoin) serializableJoin.unpack( builder );
-        log.warn( stopwatch.stop() + ":" + id );
-        stopwatch.reset();
-        stopwatch.start();
+
         boolean executedRight = preExecute == PRE_EXECUTE.RIGHT;
 
         List<Object[]> receivedValues = new ArrayList<>();
@@ -389,24 +382,15 @@ public class Functions {
             i++;
         }
 
-        log.warn( stopwatch.stop() + ":" + id + " after extract " + originalValues.size() );
-        stopwatch.reset();
-        stopwatch.start();
         long offset = context.getMaxParameterIndex() + 1;
 
         ConditionExtractor extractor = new ConditionExtractor( executedRight, rexBuilder, join.getLeft().getRowType().getFieldCount(), offset, context );
 
         Function<Object[], RexNode> conditionCreator = join.getCondition().accept( extractor );
 
-        log.warn( stopwatch.stop() + ":" + id + " after creator " );
-        stopwatch.reset();
-        stopwatch.start();
 
         adjustValues( executedRight ? join.getRight().getRowType() : join.getLeft().getRowType(), receivedValues );
 
-        log.warn( stopwatch.stop() + ":" + id + " after adjust " );
-        stopwatch.reset();
-        stopwatch.start();
 
         builder.push( executedRight ? join.getLeft() : join.getRight() );
 
@@ -415,9 +399,6 @@ public class Functions {
             nodes.add( conditionCreator.apply( receivedValue ) );
         }
 
-        log.warn( stopwatch.stop() + ":" + id + " between filter" );
-        stopwatch.reset();
-        stopwatch.start();
 
         if ( nodes.size() > 1 ) {
             builder.filter(
@@ -428,18 +409,12 @@ public class Functions {
         } else if ( nodes.size() == 1 ) {
             builder.filter( nodes.get( 0 ) );
         }
-        log.warn( stopwatch.stop() + ":" + id + " before build" );
-        stopwatch.reset();
-        stopwatch.start();
 
         AlgNode prepared = builder.build();
 
-        log.warn( stopwatch.stop() + ":" + id + " after filter" );
-        stopwatch.reset();
-        stopwatch.start();
         Enumerable<Object> left = executedRight ? executeQuery( context, prepared, rexBuilder ) : Linq4j.asEnumerable( originalValues );
         Enumerable<Object> right = executedRight ? Linq4j.asEnumerable( originalValues ) : executeQuery( context, prepared, rexBuilder );
-        log.warn( stopwatch.stop() + ":" + id );
+
         return left.join( right, ob, ob1, ob2, comp, join.getJoinType().generatesNullsOnLeft(), join.getJoinType().generatesNullsOnRight() );
     }
 
