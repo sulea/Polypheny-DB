@@ -119,16 +119,20 @@ import org.polypheny.db.algebra.json.JsonQueryWrapperBehavior;
 import org.polypheny.db.algebra.json.JsonValueEmptyOrErrorBehavior;
 import org.polypheny.db.algebra.logical.LogicalJoin;
 import org.polypheny.db.algebra.logical.LogicalJoin.SerializableJoin;
+import org.polypheny.db.algebra.operators.OperatorName;
 import org.polypheny.db.algebra.type.AlgDataType;
 import org.polypheny.db.algebra.type.AlgDataTypeField;
 import org.polypheny.db.algebra.type.AlgDataTypeSystem;
 import org.polypheny.db.config.RuntimeConfig;
 import org.polypheny.db.interpreter.Row;
+import org.polypheny.db.languages.OperatorRegistry;
 import org.polypheny.db.rex.RexBuilder;
+import org.polypheny.db.rex.RexCall;
 import org.polypheny.db.rex.RexNode;
 import org.polypheny.db.runtime.FlatLists.ComparableList;
 import org.polypheny.db.serialize.PolySerializer;
 import org.polypheny.db.tools.AlgBuilder;
+import org.polypheny.db.type.BasicPolyType;
 import org.polypheny.db.type.PolyType;
 import org.polypheny.db.type.PolyTypeFactoryImpl;
 import org.polypheny.db.type.PolyTypeUtil;
@@ -323,7 +327,6 @@ public class Functions {
 
     static AtomicLong idBuilder = new AtomicLong();
 
-
     @SuppressWarnings("unused")
     public static Enumerable<?> preExecuteJoinFilter(
             final DataContext context,
@@ -405,12 +408,27 @@ public class Functions {
 
         builder.push( executedRight ? join.getLeft() : join.getRight() );
 
-        List<RexNode> nodes = receivedValues.stream().map( conditionCreator ).collect( Collectors.toList() );
+        List<RexNode> nodes = new ArrayList<>();
+        for ( Object[] receivedValue : receivedValues ) {
+            nodes.add( conditionCreator.apply( receivedValue ) );
+        }
+        log.warn( stopwatch.stop() + ":" + id + " between filter" );
+        stopwatch.reset();
+        stopwatch.start();
+
         if ( nodes.size() > 1 ) {
-            builder.filter( builder.or( nodes ) );
+            builder.filter(
+                    new RexCall(
+                            new BasicPolyType( rexBuilder.getTypeFactory().getTypeSystem(), PolyType.BOOLEAN ),
+                            OperatorRegistry.get( OperatorName.OR ),
+                            nodes ) );
         } else if ( nodes.size() == 1 ) {
             builder.filter( nodes.get( 0 ) );
         }
+        log.warn( stopwatch.stop() + ":" + id + " before build" );
+        stopwatch.reset();
+        stopwatch.start();
+
         AlgNode prepared = builder.build();
 
         log.warn( stopwatch.stop() + ":" + id + " after filter" );
