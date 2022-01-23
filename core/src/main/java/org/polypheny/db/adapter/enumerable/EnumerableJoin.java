@@ -35,10 +35,14 @@ package org.polypheny.db.adapter.enumerable;
 
 
 import com.google.common.collect.ImmutableList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import lombok.Getter;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.calcite.linq4j.tree.BlockBuilder;
@@ -71,6 +75,7 @@ import org.polypheny.db.algebra.logical.LogicalSort;
 import org.polypheny.db.algebra.logical.LogicalTableScan.OldSerializable;
 import org.polypheny.db.algebra.metadata.AlgMdCollation;
 import org.polypheny.db.algebra.metadata.AlgMetadataQuery;
+import org.polypheny.db.algebra.type.AlgDataType;
 import org.polypheny.db.config.RuntimeConfig;
 import org.polypheny.db.plan.AlgOptCluster;
 import org.polypheny.db.plan.AlgOptCost;
@@ -441,12 +446,21 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
         private final boolean getRightAsLiterals;
         private final RexBuilder rexBuilder;
         private final int leftSize;
+        private final AtomicInteger index;
+        @Getter
+        private final Map<Integer, Object> values = new HashMap<>();
+        @Getter
+        private final Map<Integer, AlgDataType> types = new HashMap<>();
+        private final DataContext context;
+        private final boolean STORE_IN_CONTEXT = RuntimeConfig.PRE_EXECUTE_JOINS_TO_CONTEXT.getBoolean();
 
 
-        public ConditionExtractor( boolean getRightAsLiterals, RexBuilder rexBuilder, int leftSize ) {
+        public ConditionExtractor( boolean getRightAsLiterals, RexBuilder rexBuilder, int leftSize, long offset, DataContext context ) {
             this.getRightAsLiterals = getRightAsLiterals;
             this.rexBuilder = rexBuilder;
             this.leftSize = leftSize;
+            this.index = new AtomicInteger( (int) offset );
+            this.context = context;
         }
 
 
@@ -456,7 +470,16 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
                 // right = literals, left = inputs
                 if ( inputRef.getIndex() >= leftSize ) {
                     // we are right
-                    return ( o ) -> rexBuilder.makeLiteral( o[inputRef.getIndex() - leftSize], inputRef.getType(), false );
+                    if ( STORE_IN_CONTEXT ) {
+                        return ( o ) -> {
+                            int i = index.getAndIncrement();
+                            context.addSingleValue( i, inputRef.getType(), o[inputRef.getIndex() - leftSize] );
+                            return rexBuilder.makeDynamicParam( inputRef.getType(), i );
+                        };
+                    } else {
+                        return ( o ) -> rexBuilder.makeLiteral( o[inputRef.getIndex() - leftSize], inputRef.getType(), false );
+                    }
+
                 } else {
                     return ( o ) -> new RexInputRef( inputRef.getIndex(), inputRef.getType() );
                 }
@@ -464,7 +487,15 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
                 // left = literals, right = inputs
                 if ( inputRef.getIndex() < leftSize ) {
                     // we are left
-                    return ( o ) -> rexBuilder.makeLiteral( o[inputRef.getIndex()], inputRef.getType(), false );
+                    if ( STORE_IN_CONTEXT ) {
+                        return ( o ) -> {
+                            int i = index.getAndIncrement();
+                            context.addSingleValue( i, inputRef.getType(), o[inputRef.getIndex()] );
+                            return rexBuilder.makeDynamicParam( inputRef.getType(), i );
+                        };
+                    } else {
+                        return ( o ) -> rexBuilder.makeLiteral( o[inputRef.getIndex()], inputRef.getType(), false );
+                    }
                 } else {
                     return ( o ) -> new RexInputRef( inputRef.getIndex() - leftSize, inputRef.getType() );
                 }

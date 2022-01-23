@@ -392,7 +392,9 @@ public class Functions {
         log.warn( stopwatch.stop() + ":" + id + " after extract " + originalValues.size() );
         stopwatch.reset();
         stopwatch.start();
-        ConditionExtractor extractor = new ConditionExtractor( executedRight, rexBuilder, join.getLeft().getRowType().getFieldCount() );
+        long offset = context.getMaxParameterIndex() + 1;
+
+        ConditionExtractor extractor = new ConditionExtractor( executedRight, rexBuilder, join.getLeft().getRowType().getFieldCount(), offset, context );
 
         Function<Object[], RexNode> conditionCreator = join.getCondition().accept( extractor );
 
@@ -412,6 +414,7 @@ public class Functions {
         for ( Object[] receivedValue : receivedValues ) {
             nodes.add( conditionCreator.apply( receivedValue ) );
         }
+
         log.warn( stopwatch.stop() + ":" + id + " between filter" );
         stopwatch.reset();
         stopwatch.start();

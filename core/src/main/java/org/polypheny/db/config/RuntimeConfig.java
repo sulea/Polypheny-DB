@@ -328,6 +328,14 @@ public enum RuntimeConfig {
             "joinsGroup"
     ),
 
+    PRE_EXECUTE_JOINS_TO_CONTEXT(
+            "runtime/preExecuteJoinsToContext",
+            "If the generated filter should only consist of dynamic parameters and the values stored in the context.",
+            true,
+            ConfigType.BOOLEAN,
+            "joinsGroup"
+    ),
+
     PARAMETERIZE_INTERVALS(
             "runtime/parameterizeIntervals",
             "Whether intervals should be parameterized.",
