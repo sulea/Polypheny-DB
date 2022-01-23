@@ -34,9 +34,9 @@
 package org.polypheny.db.algebra.logical;
 
 
-import java.io.IOException;
-import java.io.ObjectInput;
-import java.io.ObjectOutput;
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import java.util.List;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -109,22 +109,22 @@ public final class LogicalUnion extends Union {
 
 
         @Override
-        public void writeExternal( ObjectOutput out ) throws IOException {
-            out.writeBoolean( all );
-            out.writeObject( getInputs().get( 0 ) );
-        }
-
-
-        @Override
-        public void readExternal( ObjectInput in ) throws IOException, ClassNotFoundException {
-            all = in.readBoolean();
-            addInput( (SerializableAlgNode) in.readObject() );
-        }
-
-
-        @Override
         public void accept( SerializableActivator activator ) {
             activator.visit( this );
+        }
+
+
+        @Override
+        public void write( Kryo kryo, Output output ) {
+            output.writeBoolean( all );
+            kryo.writeObject( output, getInputs() );
+        }
+
+
+        @Override
+        public void read( Kryo kryo, Input input ) {
+            all = input.readBoolean();
+            addAllInputs( kryo.readObject( input, List.class ) );
         }
 
     }

@@ -34,6 +34,10 @@
 package org.polypheny.db.rex;
 
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.Serializer;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import org.polypheny.db.algebra.constant.Kind;
 import org.polypheny.db.algebra.type.AlgDataType;
 
@@ -83,6 +87,28 @@ public class RexPatternFieldRef extends RexInputRef {
     @Override
     public Kind getKind() {
         return Kind.PATTERN_INPUT_REF;
+    }
+
+
+    public static class RexPatternFieldRefSerializer extends Serializer<RexPatternFieldRef> {
+
+        @Override
+        public void write( Kryo kryo, Output output, RexPatternFieldRef object ) {
+            output.writeString( object.alpha );
+            output.write( object.index );
+            kryo.writeObject( output, object.type );
+        }
+
+
+        @Override
+        public RexPatternFieldRef read( Kryo kryo, Input input, Class<? extends RexPatternFieldRef> type ) {
+            final String alpha = input.readString();
+            final int index = input.read();
+            final AlgDataType t = kryo.readObject( input, AlgDataType.class );
+
+            return new RexPatternFieldRef( alpha, index, t );
+        }
+
     }
 
 }

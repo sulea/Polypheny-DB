@@ -40,6 +40,7 @@ import com.drew.metadata.Directory;
 import com.drew.metadata.Metadata;
 import com.drew.metadata.Tag;
 import com.google.common.base.Joiner;
+import com.google.common.base.Stopwatch;
 import com.google.gson.Gson;
 import com.jayway.jsonpath.Configuration;
 import com.jayway.jsonpath.DocumentContext;
@@ -118,17 +119,15 @@ import org.polypheny.db.algebra.json.JsonQueryWrapperBehavior;
 import org.polypheny.db.algebra.json.JsonValueEmptyOrErrorBehavior;
 import org.polypheny.db.algebra.logical.LogicalJoin;
 import org.polypheny.db.algebra.logical.LogicalJoin.SerializableJoin;
-import org.polypheny.db.algebra.operators.OperatorName;
 import org.polypheny.db.algebra.type.AlgDataType;
 import org.polypheny.db.algebra.type.AlgDataTypeField;
 import org.polypheny.db.algebra.type.AlgDataTypeSystem;
 import org.polypheny.db.config.RuntimeConfig;
 import org.polypheny.db.interpreter.Row;
-import org.polypheny.db.languages.OperatorRegistry;
 import org.polypheny.db.rex.RexBuilder;
 import org.polypheny.db.rex.RexNode;
 import org.polypheny.db.runtime.FlatLists.ComparableList;
-import org.polypheny.db.serialize.Serializer;
+import org.polypheny.db.serialize.PolySerializer;
 import org.polypheny.db.tools.AlgBuilder;
 import org.polypheny.db.type.PolyType;
 import org.polypheny.db.type.PolyTypeFactoryImpl;
@@ -322,6 +321,9 @@ public class Functions {
     }
 
 
+    static AtomicLong idBuilder = new AtomicLong();
+
+
     @SuppressWarnings("unused")
     public static Enumerable<?> preExecuteJoinFilter(
             final DataContext context,
@@ -330,30 +332,39 @@ public class Functions {
             Function1<Object, Object> ob1,
             Function2<Object, Object, Object> ob2,
             EqualityComparer<Object> comp,
-            String other,
+            byte[] other,
             PRE_EXECUTE preExecute ) {
         context.getStatement().getTransaction().setAnalyze( false );
-
+        long id = idBuilder.getAndIncrement();
+        Stopwatch stopwatch = Stopwatch.createStarted();
         AlgBuilder builder = AlgBuilder.create( context.getStatement() );
         RexBuilder rexBuilder = builder.getRexBuilder();
-        SerializableJoin serializableJoin = Serializer.asDecompressedObject( other, SerializableJoin.class );
+        //SerializableJoin serializableJoin = PolySerializer.asDecompressedObject( other, SerializableJoin.class );
+        SerializableJoin serializableJoin = PolySerializer.deserializeAndCompress( other, SerializableJoin.class );
+        log.warn( stopwatch.stop() + ":" + id );
+        stopwatch.reset();
+        stopwatch.start();
         LogicalJoin join = (LogicalJoin) serializableJoin.unpack( builder );
+        log.warn( stopwatch.stop() + ":" + id );
+        stopwatch.reset();
+        stopwatch.start();
         boolean executedRight = preExecute == PRE_EXECUTE.RIGHT;
 
         List<Object[]> receivedValues = new ArrayList<>();
         List<Object> originalValues = new ArrayList<>();
-        boolean isMultiple = false;
+        Boolean isMultiple = null;
         long i = 0;
 
         Iterator<Object> iter = baz.iterator();
         while ( iter.hasNext() ) {
             Object objects = iter.next();
 
-            if ( isMultiple || objects instanceof Object[] ) {
+            if ( (isMultiple != null && isMultiple) || (isMultiple == null && objects instanceof Object[]) ) {
                 receivedValues.add( (Object[]) objects );
                 isMultiple = true;
             } else {
                 receivedValues.add( new Object[]{ objects } );
+                isMultiple = false;
             }
             originalValues.add( objects );
 
@@ -375,25 +386,39 @@ public class Functions {
             i++;
         }
 
+        log.warn( stopwatch.stop() + ":" + id + " after extract " + originalValues.size() );
+        stopwatch.reset();
+        stopwatch.start();
         ConditionExtractor extractor = new ConditionExtractor( executedRight, rexBuilder, join.getLeft().getRowType().getFieldCount() );
 
         Function<Object[], RexNode> conditionCreator = join.getCondition().accept( extractor );
 
+        log.warn( stopwatch.stop() + ":" + id + " after creator " );
+        stopwatch.reset();
+        stopwatch.start();
+
         adjustValues( executedRight ? join.getRight().getRowType() : join.getLeft().getRowType(), receivedValues );
+
+        log.warn( stopwatch.stop() + ":" + id + " after adjust " );
+        stopwatch.reset();
+        stopwatch.start();
 
         builder.push( executedRight ? join.getLeft() : join.getRight() );
 
         List<RexNode> nodes = receivedValues.stream().map( conditionCreator ).collect( Collectors.toList() );
         if ( nodes.size() > 1 ) {
-            builder.filter( rexBuilder.makeCall( OperatorRegistry.get( OperatorName.OR ), nodes ) );
+            builder.filter( builder.or( nodes ) );
         } else if ( nodes.size() == 1 ) {
             builder.filter( nodes.get( 0 ) );
         }
         AlgNode prepared = builder.build();
 
+        log.warn( stopwatch.stop() + ":" + id + " after filter" );
+        stopwatch.reset();
+        stopwatch.start();
         Enumerable<Object> left = executedRight ? executeQuery( context, prepared, rexBuilder ) : Linq4j.asEnumerable( originalValues );
         Enumerable<Object> right = executedRight ? Linq4j.asEnumerable( originalValues ) : executeQuery( context, prepared, rexBuilder );
-
+        log.warn( stopwatch.stop() + ":" + id );
         return left.join( right, ob, ob1, ob2, comp, join.getJoinType().generatesNullsOnLeft(), join.getJoinType().generatesNullsOnRight() );
     }
 

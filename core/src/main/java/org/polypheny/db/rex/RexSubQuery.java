@@ -34,10 +34,15 @@
 package org.polypheny.db.rex;
 
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.Serializer;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import com.google.common.collect.ImmutableList;
 import java.util.List;
 import javax.annotation.Nonnull;
 import org.polypheny.db.algebra.AlgNode;
+import org.polypheny.db.algebra.SerializableAlgNode;
 import org.polypheny.db.algebra.constant.Kind;
 import org.polypheny.db.algebra.operators.OperatorName;
 import org.polypheny.db.algebra.type.AlgDataType;
@@ -47,6 +52,7 @@ import org.polypheny.db.languages.OperatorRegistry;
 import org.polypheny.db.nodes.Operator;
 import org.polypheny.db.nodes.QuantifyOperator;
 import org.polypheny.db.plan.AlgOptUtil;
+import org.polypheny.db.tools.AlgBuilder;
 import org.polypheny.db.type.PolyType;
 
 
@@ -168,6 +174,45 @@ public class RexSubQuery extends RexCall {
 
     public RexSubQuery clone( AlgDataType type, List<RexNode> operands, AlgNode alg ) {
         return new RexSubQuery( type, getOperator(), ImmutableList.copyOf( operands ), alg );
+    }
+
+
+    public static class RexSubQuerySerializer extends Serializer<RexSubQuery> {
+
+        private final AlgBuilder builder;
+
+
+        public RexSubQuerySerializer( AlgBuilder builder ) {
+            super();
+            this.builder = builder;
+        }
+
+
+        @Override
+        public void write( Kryo kryo, Output output, RexSubQuery object ) {
+            output.writeString( object.op.getOperatorName().name() );
+            kryo.writeObject( output, object.operands );
+            kryo.writeClassAndObject( output, object.type );
+            // we transform it into a Serializable representation and have to be careful, when extracting again
+            kryo.writeObject( output, SerializableAlgNode.pack( object.alg ) );
+        }
+
+
+        @Override
+        public RexSubQuery read( Kryo kryo, Input input, Class<? extends RexSubQuery> type ) {
+            final Operator op = OperatorRegistry.get( OperatorName.valueOf( input.readString() ) );
+            final ImmutableList<RexNode> operands = kryo.readObject( input, ImmutableList.class );
+            final AlgDataType t = (AlgDataType) kryo.readClassAndObject( input );
+
+            if ( builder == null ) {
+                throw new RuntimeException( "There was no builder provided to rebuild the SerializableAlgNode." );
+            }
+
+            final AlgNode algNode = kryo.readObject( input, SerializableAlgNode.class ).unpack( builder );
+
+            return new RexSubQuery( t, op, operands, algNode );
+        }
+
     }
 
 }

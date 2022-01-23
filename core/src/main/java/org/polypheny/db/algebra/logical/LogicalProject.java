@@ -34,9 +34,9 @@
 package org.polypheny.db.algebra.logical;
 
 
-import java.io.IOException;
-import java.io.ObjectInput;
-import java.io.ObjectOutput;
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -158,25 +158,24 @@ public final class LogicalProject extends Project {
 
 
         @Override
-        public void writeExternal( ObjectOutput out ) throws IOException {
-            out.writeObject( projects );
-            out.writeObject( names );
-            out.writeObject( getInputs().get( 0 ) );
-        }
-
-
-        @SuppressWarnings("unchecked")
-        @Override
-        public void readExternal( ObjectInput in ) throws IOException, ClassNotFoundException {
-            projects = (List<RexNode>) in.readObject();
-            names = (List<String>) in.readObject();
-            addInput( (SerializableAlgNode) in.readObject() );
-        }
-
-
-        @Override
         public void accept( SerializableActivator activator ) {
             activator.visit( this );
+        }
+
+
+        @Override
+        public void write( Kryo kryo, Output output ) {
+            kryo.writeClassAndObject( output, projects );
+            kryo.writeClassAndObject( output, names );
+            kryo.writeClassAndObject( output, getInputs().get( 0 ) );
+        }
+
+
+        @Override
+        public void read( Kryo kryo, Input input ) {
+            projects = (List<RexNode>) kryo.readClassAndObject( input );
+            names = (List<String>) kryo.readClassAndObject( input );
+            addInput( (SerializableAlgNode) kryo.readClassAndObject( input ) );
         }
 
     }

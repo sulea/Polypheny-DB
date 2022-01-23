@@ -34,11 +34,11 @@
 package org.polypheny.db.algebra.logical;
 
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import java.io.IOException;
-import java.io.ObjectInput;
-import java.io.ObjectOutput;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -181,26 +181,26 @@ public final class LogicalJoin extends Join {
 
 
         @Override
-        public void writeExternal( ObjectOutput out ) throws IOException {
-            out.writeObject( joinType );
-            out.writeObject( condition );
-            out.writeObject( this.getInputs().get( 0 ) );
-            out.writeObject( this.getInputs().get( 1 ) );
-        }
-
-
-        @Override
-        public void readExternal( ObjectInput in ) throws IOException, ClassNotFoundException {
-            joinType = (JoinAlgType) in.readObject();
-            condition = (RexNode) in.readObject();
-            addInput( (SerializableAlgNode) in.readObject() );
-            addInput( (SerializableAlgNode) in.readObject() );
-        }
-
-
-        @Override
         public void accept( SerializableActivator activator ) {
             activator.visit( this );
+        }
+
+
+        @Override
+        public void write( Kryo kryo, Output output ) {
+            kryo.writeObject( output, joinType );
+            kryo.writeClassAndObject( output, condition );
+            kryo.writeClassAndObject( output, getInputs().get( 0 ) );
+            kryo.writeClassAndObject( output, getInputs().get( 1 ) );
+        }
+
+
+        @Override
+        public void read( Kryo kryo, Input input ) {
+            joinType = kryo.readObject( input, JoinAlgType.class );
+            condition = (RexNode) kryo.readClassAndObject( input );
+            addInput( (SerializableAlgNode) kryo.readClassAndObject( input ) );
+            addInput( (SerializableAlgNode) kryo.readClassAndObject( input ) );
         }
 
     }

@@ -34,6 +34,10 @@
 package org.polypheny.db.algebra.core;
 
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.Serializer;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -405,6 +409,30 @@ public abstract class Match extends SingleAlg {
         @Override
         public int compareTo( RexMRAggCall o ) {
             return toString().compareTo( o.toString() );
+        }
+
+
+        public static class RexMRAggCallSerializer extends Serializer<RexMRAggCall> {
+
+            @Override
+            public void write( Kryo kryo, Output output, RexMRAggCall object ) {
+                output.write( object.ordinal );
+                output.writeString( object.op.getOperatorName().name() );
+                kryo.writeObject( output, object.type );
+                kryo.writeObject( output, object.operands );
+            }
+
+
+            @Override
+            public RexMRAggCall read( Kryo kryo, Input input, Class<? extends RexMRAggCall> type ) {
+                final int ordinal = input.read();
+                final AggFunction aggFunction = OperatorRegistry.getAgg( OperatorName.valueOf( input.readString() ) );
+                final AlgDataType t = kryo.readObject( input, AlgDataType.class );
+                final ImmutableList<RexNode> operands = kryo.readObject( input, ImmutableList.class );
+
+                return new RexMRAggCall( aggFunction, t, operands, ordinal );
+            }
+
         }
 
     }

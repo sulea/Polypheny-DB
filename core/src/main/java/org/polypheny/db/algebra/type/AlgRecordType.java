@@ -34,6 +34,10 @@
 package org.polypheny.db.algebra.type;
 
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.Serializer;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import java.io.Serializable;
 import java.util.List;
 import java.util.Objects;
@@ -154,6 +158,26 @@ public class AlgRecordType extends AlgDataTypeImpl implements Serializable {
          */
         private Object readResolve() {
             return new AlgRecordType( fields );
+        }
+
+    }
+
+
+    public static class AlgRecordTypeSerializer extends Serializer<AlgRecordType> {
+
+        @Override
+        public void write( Kryo kryo, Output output, AlgRecordType object ) {
+            kryo.writeObjectOrNull( output, object.kind, StructKind.class );
+            kryo.writeObjectOrNull( output, object.fieldList, List.class );
+        }
+
+
+        @Override
+        public AlgRecordType read( Kryo kryo, Input input, Class<? extends AlgRecordType> type ) {
+            final StructKind kind = kryo.readObjectOrNull( input, StructKind.class );
+            final List<AlgDataTypeField> fields = kryo.readObjectOrNull( input, List.class );
+
+            return new AlgRecordType( kind, fields );
         }
 
     }

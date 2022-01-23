@@ -34,6 +34,10 @@
 package org.polypheny.db.rex;
 
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.Serializer;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import java.util.List;
 import java.util.Objects;
 import org.polypheny.db.algebra.constant.Kind;
@@ -101,6 +105,26 @@ public class RexLocalRef extends RexSlot {
 
     private static String createName( int index ) {
         return NAMES.get( index );
+    }
+
+
+    public static class RexLocalRefSerializer extends Serializer<RexLocalRef> {
+
+        @Override
+        public void write( Kryo kryo, Output output, RexLocalRef object ) {
+            output.write( object.index );
+            kryo.writeObject( output, object.type );
+        }
+
+
+        @Override
+        public RexLocalRef read( Kryo kryo, Input input, Class<? extends RexLocalRef> type ) {
+            final int index = input.read();
+            final AlgDataType t = kryo.readObject( input, AlgDataType.class );
+
+            return new RexLocalRef( index, t );
+        }
+
     }
 
 }

@@ -34,6 +34,10 @@
 package org.polypheny.db.rex;
 
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.Serializer;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import java.util.List;
 import org.polypheny.db.algebra.constant.Kind;
 import org.polypheny.db.algebra.metadata.BuiltInMetadata.AllPredicates;
@@ -185,6 +189,28 @@ public class RexTableInputRef extends RexInputRef {
         @Override
         public int compareTo( AlgTableRef o ) {
             return digest.compareTo( o.digest );
+        }
+
+    }
+
+
+    public static class RexTableInputRefSerializer extends Serializer<RexTableInputRef> {
+
+        @Override
+        public void write( Kryo kryo, Output output, RexTableInputRef object ) {
+            output.write( object.index );
+            kryo.writeObject( output, object.tableRef );
+            kryo.writeObject( output, object.type );
+        }
+
+
+        @Override
+        public RexTableInputRef read( Kryo kryo, Input input, Class<? extends RexTableInputRef> type ) {
+            final int index = input.read();
+            final AlgTableRef tableRef = kryo.readObject( input, AlgTableRef.class );
+            final AlgDataType t = kryo.readObject( input, AlgDataType.class );
+
+            return new RexTableInputRef( tableRef, index, t );
         }
 
     }

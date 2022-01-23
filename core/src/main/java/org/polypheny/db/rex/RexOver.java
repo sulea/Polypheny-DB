@@ -34,11 +34,18 @@
 package org.polypheny.db.rex;
 
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.Serializer;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import java.util.List;
 import java.util.Objects;
 import javax.annotation.Nonnull;
+import org.polypheny.db.algebra.operators.OperatorName;
 import org.polypheny.db.algebra.type.AlgDataType;
+import org.polypheny.db.languages.OperatorRegistry;
 import org.polypheny.db.nodes.Operator;
 import org.polypheny.db.util.ControlFlowException;
 import org.polypheny.db.util.Util;
@@ -205,6 +212,34 @@ public class RexOver extends RexCall {
         @Override
         public Void visitOver( RexOver over ) {
             throw OverFound.INSTANCE;
+        }
+
+    }
+
+
+    public static class RexOverSerializer extends Serializer<RexOver> {
+
+        @Override
+        public void write( Kryo kryo, Output output, RexOver object ) {
+            kryo.writeObject( output, object.window );
+            output.writeBoolean( object.distinct );
+
+            output.writeString( object.op.getOperatorName().name() );
+            kryo.writeObject( output, object.operands );
+            kryo.writeObject( output, object.type );
+        }
+
+
+        @Override
+        public RexOver read( Kryo kryo, Input input, Class<? extends RexOver> type ) {
+            final RexWindow window = kryo.readObject( input, RexWindow.class );
+            final boolean distinct = input.readBoolean();
+
+            final Operator op = OperatorRegistry.get( OperatorName.valueOf( input.readString() ) );
+            final ImmutableList<RexNode> operands = kryo.readObject( input, ImmutableList.class );
+            final AlgDataType t = kryo.readObject( input, AlgDataType.class );
+
+            return new RexOver( t, op, operands, window, distinct );
         }
 
     }

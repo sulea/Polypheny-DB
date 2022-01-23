@@ -34,10 +34,10 @@
 package org.polypheny.db.algebra.logical;
 
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import com.google.common.collect.ImmutableList;
-import java.io.IOException;
-import java.io.ObjectInput;
-import java.io.ObjectOutput;
 import java.util.List;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -145,29 +145,28 @@ public final class LogicalAggregate extends Aggregate {
 
 
         @Override
-        public void writeExternal( ObjectOutput out ) throws IOException {
-            out.writeBoolean( indicator );
-            out.writeObject( groupSet );
-            out.writeObject( groupSets );
-            out.writeObject( aggCallList );
-            out.writeObject( getInputs().get( 0 ) );
-        }
-
-
-        @SuppressWarnings("unchecked")
-        @Override
-        public void readExternal( ObjectInput in ) throws IOException, ClassNotFoundException {
-            indicator = in.readBoolean();
-            groupSet = (ImmutableBitSet) in.readObject();
-            groupSets = (ImmutableList<ImmutableBitSet>) in.readObject();
-            aggCallList = (List<AggregateCall>) in.readObject();
-            addInput( (SerializableAlgNode) in.readObject() );
-        }
-
-
-        @Override
         public void accept( SerializableActivator activator ) {
             activator.visit( this );
+        }
+
+
+        @Override
+        public void write( Kryo kryo, Output out ) {
+            out.writeBoolean( indicator );
+            kryo.writeObject( out, groupSet );
+            kryo.writeObject( out, groupSets );
+            kryo.writeObject( out, aggCallList );
+            kryo.writeClassAndObject( out, getInputs().get( 0 ) );
+        }
+
+
+        @Override
+        public void read( Kryo kryo, Input input ) {
+            indicator = input.readBoolean();
+            groupSet = kryo.readObject( input, ImmutableBitSet.class );
+            groupSets = kryo.readObject( input, ImmutableList.class );
+            aggCallList = kryo.readObject( input, List.class );
+            addInput( (SerializableAlgNode) kryo.readClassAndObject( input ) );
         }
 
     }

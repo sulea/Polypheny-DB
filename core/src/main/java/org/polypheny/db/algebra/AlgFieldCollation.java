@@ -34,6 +34,10 @@
 package org.polypheny.db.algebra;
 
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.Serializer;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import java.io.Serializable;
 import java.util.Objects;
 import org.polypheny.db.algebra.constant.Monotonicity;
@@ -304,6 +308,28 @@ public class AlgFieldCollation implements Serializable {
             default:
                 return direction.shortString;
         }
+    }
+
+
+    public static class AlgFieldCollationSerializer extends Serializer<AlgFieldCollation> {
+
+        @Override
+        public void write( Kryo kryo, Output output, AlgFieldCollation object ) {
+            kryo.writeObjectOrNull( output, object.direction, Direction.class );
+            kryo.writeObjectOrNull( output, object.nullDirection, NullDirection.class );
+            output.write( object.fieldIndex );
+        }
+
+
+        @Override
+        public AlgFieldCollation read( Kryo kryo, Input input, Class<? extends AlgFieldCollation> type ) {
+            Direction direction = kryo.readObjectOrNull( input, Direction.class );
+            NullDirection nullDirection = kryo.readObjectOrNull( input, NullDirection.class );
+            int fieldIndex = input.read();
+
+            return new AlgFieldCollation( fieldIndex, direction, nullDirection );
+        }
+
     }
 
 }

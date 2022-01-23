@@ -34,6 +34,10 @@
 package org.polypheny.db.rex;
 
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.Serializer;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import java.util.Objects;
 import org.polypheny.db.algebra.constant.Kind;
 import org.polypheny.db.algebra.type.AlgDataType;
@@ -95,6 +99,26 @@ public class RexDynamicParam extends RexVariable {
     @Override
     public int hashCode() {
         return Objects.hash( digest, type, index );
+    }
+
+
+    public static class RexDynamicParamSerializer extends Serializer<RexDynamicParam> {
+
+        @Override
+        public void write( Kryo kryo, Output output, RexDynamicParam object ) {
+            output.writeLong( object.index );
+            kryo.writeClassAndObject( output, object.getType() );
+        }
+
+
+        @Override
+        public RexDynamicParam read( Kryo kryo, Input input, Class<? extends RexDynamicParam> type ) {
+            long index = input.readLong();
+            AlgDataType t = (AlgDataType) kryo.readClassAndObject( input );
+
+            return new RexDynamicParam( t, index );
+        }
+
     }
 
 }

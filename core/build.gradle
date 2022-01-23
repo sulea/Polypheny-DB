@@ -74,6 +74,8 @@ dependencies {
     testImplementation group: "org.mockito", name: "mockito-core", version: mockito_core_version  // MIT
     implementation group: 'de.ruedigermoeller', name: 'fst', version: '2.57' // Apache 2.0
 
+    implementation 'com.esotericsoftware:kryo:5.2.1' //BSD-3-Clause License
+
     //testImplementation group: "org.apache.calcite", name: "calcite-linq4j", version: calcite_linq4j_version  // Apache 2.0
     //testImplementation group: "com.h2database", name: "h2", version: h2_version
     //testImplementation group: "mysql", name: "mysql-connector-java", version: mysql_connector_java_version

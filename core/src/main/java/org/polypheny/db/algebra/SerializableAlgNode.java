@@ -16,7 +16,7 @@
 
 package org.polypheny.db.algebra;
 
-import java.io.Externalizable;
+import com.esotericsoftware.kryo.KryoSerializable;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
@@ -53,7 +53,7 @@ import org.polypheny.db.tools.AlgBuilder;
 import org.polypheny.db.util.Pair;
 import org.polypheny.db.util.Permutation;
 
-public abstract class SerializableAlgNode implements Externalizable {
+public abstract class SerializableAlgNode implements KryoSerializable {
 
     private static final AtomicInteger NEXT_ID = new AtomicInteger( 0 );
     @Getter
@@ -77,6 +77,11 @@ public abstract class SerializableAlgNode implements Externalizable {
 
     public void addInput( SerializableAlgNode node ) {
         this.inputs.add( node );
+    }
+
+
+    public void addAllInputs( List<SerializableAlgNode> nodes ) {
+        this.inputs.addAll( nodes );
     }
 
 

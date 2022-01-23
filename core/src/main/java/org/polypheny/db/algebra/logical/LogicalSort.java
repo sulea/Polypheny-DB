@@ -34,9 +34,9 @@
 package org.polypheny.db.algebra.logical;
 
 
-import java.io.IOException;
-import java.io.ObjectInput;
-import java.io.ObjectOutput;
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.polypheny.db.algebra.AlgCollation;
@@ -127,29 +127,29 @@ public final class LogicalSort extends Sort {
 
 
         @Override
-        public void writeExternal( ObjectOutput out ) throws IOException {
-            out.writeLong( offset );
-            out.writeLong( fetch );
-            out.writeObject( collation );
-            out.writeObject( getInputs().get( 0 ) );
+        public void accept( SerializableActivator activator ) {
+            activator.visit( this );
         }
 
 
         @Override
-        public void readExternal( ObjectInput in ) throws IOException, ClassNotFoundException {
-            this.offset = in.readLong();
-            this.fetch = in.readLong();
-            this.collation = (AlgCollation) in.readObject();
+        public void write( Kryo kryo, Output output ) {
+            output.writeLong( offset );
+            output.writeLong( fetch );
+            kryo.writeObject( output, collation );
+            kryo.writeClassAndObject( output, getInputs().get( 0 ) );
+        }
+
+
+        @Override
+        public void read( Kryo kryo, Input input ) {
+            this.offset = input.readLong();
+            this.fetch = input.readLong();
+            this.collation = kryo.readObject( input, AlgCollation.class );
             this.usesFetch = fetch != -1;
             this.usesOffset = offset != -1;
             this.onlyLimit = collation != null;
-            addInput( (SerializableAlgNode) in.readObject() );
-        }
-
-
-        @Override
-        public void accept( SerializableActivator activator ) {
-            activator.visit( this );
+            addInput( (SerializableAlgNode) kryo.readClassAndObject( input ) );
         }
 
     }

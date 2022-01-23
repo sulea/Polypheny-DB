@@ -34,6 +34,10 @@
 package org.polypheny.db.algebra.core;
 
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.Serializer;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import com.google.common.collect.ImmutableList;
 import java.util.AbstractList;
 import java.util.List;
@@ -48,7 +52,9 @@ import org.polypheny.db.algebra.AlgWriter;
 import org.polypheny.db.algebra.SingleAlg;
 import org.polypheny.db.algebra.fun.AggFunction;
 import org.polypheny.db.algebra.metadata.AlgMetadataQuery;
+import org.polypheny.db.algebra.operators.OperatorName;
 import org.polypheny.db.algebra.type.AlgDataType;
+import org.polypheny.db.languages.OperatorRegistry;
 import org.polypheny.db.nodes.Operator;
 import org.polypheny.db.plan.AlgOptCluster;
 import org.polypheny.db.plan.AlgOptCost;
@@ -421,6 +427,34 @@ public abstract class Window extends SingleAlg {
         @Override
         public RexCall clone( AlgDataType type, List<RexNode> operands ) {
             throw new UnsupportedOperationException();
+        }
+
+
+        public static class RexWinAggCallSerializer extends Serializer<RexWinAggCall> {
+
+            @Override
+            public void write( Kryo kryo, Output output, RexWinAggCall object ) {
+                output.writeString( object.op.getOperatorName().name() );
+                kryo.writeObject( output, object.operands );
+                kryo.writeObject( output, object.type );
+
+                output.write( object.ordinal );
+                output.writeBoolean( object.distinct );
+            }
+
+
+            @Override
+            public RexWinAggCall read( Kryo kryo, Input input, Class<? extends RexWinAggCall> type ) {
+                final Operator op = OperatorRegistry.get( OperatorName.valueOf( input.readString() ) );
+                final ImmutableList<RexNode> operands = kryo.readObject( input, ImmutableList.class );
+                final AlgDataType t = kryo.readObject( input, AlgDataType.class );
+
+                final int ordinal = input.read();
+                final boolean distinct = input.readBoolean();
+
+                return new RexWinAggCall( op, t, operands, ordinal, distinct );
+            }
+
         }
 
     }

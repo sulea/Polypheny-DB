@@ -34,10 +34,10 @@
 package org.polypheny.db.algebra.logical;
 
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import com.google.common.collect.ImmutableSet;
-import java.io.IOException;
-import java.io.ObjectInput;
-import java.io.ObjectOutput;
 import java.util.Objects;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -153,22 +153,22 @@ public final class LogicalFilter extends Filter {
 
 
         @Override
-        public void writeExternal( ObjectOutput out ) throws IOException {
-            out.writeObject( condition );
-            out.writeObject( getInputs().get( 0 ) );
-        }
-
-
-        @Override
-        public void readExternal( ObjectInput in ) throws IOException, ClassNotFoundException {
-            condition = (RexNode) in.readObject();
-            addInput( (SerializableAlgNode) in.readObject() );
-        }
-
-
-        @Override
         public void accept( SerializableActivator activator ) {
             activator.visit( this );
+        }
+
+
+        @Override
+        public void write( Kryo kryo, Output output ) {
+            kryo.writeClassAndObject( output, condition );
+            kryo.writeClassAndObject( output, getInputs().get( 0 ) );
+        }
+
+
+        @Override
+        public void read( Kryo kryo, Input input ) {
+            condition = (RexNode) kryo.readClassAndObject( input );
+            addInput( (SerializableAlgNode) kryo.readClassAndObject( input ) );
         }
 
     }

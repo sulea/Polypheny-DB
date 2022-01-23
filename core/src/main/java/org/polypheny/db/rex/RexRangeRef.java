@@ -34,6 +34,10 @@
 package org.polypheny.db.rex;
 
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.Serializer;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import java.util.Objects;
 import org.polypheny.db.algebra.AlgNode;
 import org.polypheny.db.algebra.type.AlgDataType;
@@ -103,6 +107,26 @@ public class RexRangeRef extends RexNode {
     @Override
     public int hashCode() {
         return Objects.hash( type, offset );
+    }
+
+
+    public static class RexRangeRefSerializer extends Serializer<RexRangeRef> {
+
+        @Override
+        public void write( Kryo kryo, Output output, RexRangeRef object ) {
+            kryo.writeObject( output, object.type );
+            output.write( object.offset );
+        }
+
+
+        @Override
+        public RexRangeRef read( Kryo kryo, Input input, Class<? extends RexRangeRef> type ) {
+            final AlgDataType t = kryo.readObject( input, AlgDataType.class );
+            final int offset = input.read();
+
+            return new RexRangeRef( t, offset );
+        }
+
     }
 
 }

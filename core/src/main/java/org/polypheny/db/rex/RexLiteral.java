@@ -34,6 +34,10 @@
 package org.polypheny.db.rex;
 
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.Serializer;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import java.io.PrintWriter;
@@ -1151,6 +1155,28 @@ public class RexLiteral extends RexNode {
     @Override
     public <R, P> R accept( RexBiVisitor<R, P> visitor, P arg ) {
         return visitor.visitLiteral( this, arg );
+    }
+
+
+    public static class RexLiteralSerializer extends Serializer<RexLiteral> {
+
+        @Override
+        public void write( Kryo kryo, Output output, RexLiteral object ) {
+            kryo.writeObject( output, object.type );
+            kryo.writeObject( output, object.value );
+            kryo.writeObject( output, object.typeName );
+        }
+
+
+        @Override
+        public RexLiteral read( Kryo kryo, Input input, Class<? extends RexLiteral> type ) {
+            final AlgDataType t = kryo.readObject( input, AlgDataType.class );
+            final Comparable<?> value = kryo.readObject( input, Comparable.class );
+            final PolyType typeName = kryo.readObject( input, PolyType.class );
+
+            return new RexLiteral( value, t, typeName, true );
+        }
+
     }
 
 }

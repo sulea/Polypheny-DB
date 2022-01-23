@@ -94,7 +94,7 @@ import org.polypheny.db.rex.RexRangeRef;
 import org.polypheny.db.rex.RexSubQuery;
 import org.polypheny.db.rex.RexTableInputRef;
 import org.polypheny.db.rex.RexVisitor;
-import org.polypheny.db.serialize.Serializer;
+import org.polypheny.db.serialize.PolySerializer;
 import org.polypheny.db.tools.AlgBuilder;
 import org.polypheny.db.util.BuiltInMethod;
 import org.polypheny.db.util.ImmutableIntList;
@@ -233,7 +233,7 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
         this.accept( rebuilder );
         AlgNode rebuild = rebuilder.builder.build();
 
-        String compressed = Serializer.asCompressedByteString( rebuild );
+        String compressed = PolySerializer.asCompressedByteString( rebuild );
 
         String name = builder.newName( "join_" + System.nanoTime() );
         ParameterExpression nameExpr = Expressions.parameter( String.class, name );
@@ -275,10 +275,11 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
         BlockBuilder builder = new BlockBuilder();
         SerializableAlgNode serialized = SerializableAlgNode.pack( this );
 
-        String compressed = Serializer.asCompressedByteString( serialized );
+        //String compressed = PolySerializer.asCompressedByteString( serialized );
+        byte[] compressed = PolySerializer.serializeAndCompress( serialized );
 
         String name = builder.newName( "join_" + System.nanoTime() );
-        ParameterExpression nameExpr = Expressions.parameter( String.class, name );
+        ParameterExpression nameExpr = Expressions.parameter( byte[].class, name );
         implementor.getNodes().put( nameExpr, compressed );
 
         final PhysType physType = PhysTypeImpl.of( implementor.getTypeFactory(), getRowType(), pref.preferArray() );
@@ -457,7 +458,7 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
                     // we are right
                     return ( o ) -> rexBuilder.makeLiteral( o[inputRef.getIndex() - leftSize], inputRef.getType(), false );
                 } else {
-                    return ( o ) -> rexBuilder.makeInputRef( inputRef.getType(), inputRef.getIndex() );
+                    return ( o ) -> new RexInputRef( inputRef.getIndex(), inputRef.getType() );
                 }
             } else {
                 // left = literals, right = inputs
@@ -465,7 +466,7 @@ public class EnumerableJoin extends EquiJoin implements EnumerableAlg {
                     // we are left
                     return ( o ) -> rexBuilder.makeLiteral( o[inputRef.getIndex()], inputRef.getType(), false );
                 } else {
-                    return ( o ) -> rexBuilder.makeInputRef( inputRef.getType(), inputRef.getIndex() - leftSize );
+                    return ( o ) -> new RexInputRef( inputRef.getIndex() - leftSize, inputRef.getType() );
                 }
             }
         }

@@ -34,6 +34,10 @@
 package org.polypheny.db.util;
 
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.Serializer;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -106,5 +110,25 @@ public class SerializableCharset implements Serializable {
         }
         return new SerializableCharset( charset );
     }
+
+
+    public static class SerializableCharsetSerializer extends Serializer<SerializableCharset> {
+
+        @Override
+        public void write( Kryo kryo, Output output, SerializableCharset object ) {
+            output.writeString( "empty" );
+        }
+
+
+        @Override
+        public SerializableCharset read( Kryo kryo, Input input, Class<? extends SerializableCharset> type ) {
+            final String charsetName = input.readString();
+            final Charset charset = Charset.defaultCharset();//.availableCharsets().get( charsetName );
+
+            return new SerializableCharset( charset );
+        }
+
+    }
+
 }
 

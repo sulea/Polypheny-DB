@@ -34,10 +34,17 @@
 package org.polypheny.db.algebra;
 
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.Serializer;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
 import com.google.common.collect.UnmodifiableIterator;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 import javax.annotation.Nonnull;
 import lombok.Getter;
 import org.polypheny.db.plan.AlgMultipleTrait;
@@ -147,6 +154,25 @@ public class AlgCollationImpl implements AlgCollation {
             }
             sb.append( ',' ).append( ' ' );
         }
+    }
+
+
+    public static class AlgCollationSerializer extends Serializer<AlgCollation> {
+
+        @Override
+        public void write( Kryo kryo, Output output, AlgCollation object ) {
+            new ArrayList<>( object.getFieldCollations() );
+            kryo.writeClassAndObject( output, Lists.newArrayList( object.getFieldCollations() ) );
+        }
+
+
+        @Override
+        public AlgCollation read( Kryo kryo, Input input, Class<? extends AlgCollation> type ) {
+            ImmutableList<AlgFieldCollation> fields = ImmutableList.copyOf( (List<AlgFieldCollation>) kryo.readClassAndObject( input ) );
+
+            return new AlgCollationImpl( fields );
+        }
+
     }
 
 }

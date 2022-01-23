@@ -34,10 +34,10 @@
 package org.polypheny.db.algebra.logical;
 
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import com.google.common.collect.ImmutableList;
-import java.io.IOException;
-import java.io.ObjectInput;
-import java.io.ObjectOutput;
 import java.math.BigDecimal;
 import java.util.List;
 import lombok.Getter;
@@ -154,23 +154,22 @@ public class LogicalValues extends Values {
 
 
         @Override
-        public void writeExternal( ObjectOutput out ) throws IOException {
-            out.writeObject( rowType );
-            out.writeObject( tuples );
-        }
-
-
-        @SuppressWarnings("unchecked")
-        @Override
-        public void readExternal( ObjectInput in ) throws IOException, ClassNotFoundException {
-            this.rowType = (AlgRecordType) in.readObject();
-            this.tuples = (ImmutableList<ImmutableList<RexLiteral>>) in.readObject();
-        }
-
-
-        @Override
         public void accept( SerializableActivator activator ) {
             activator.visit( this );
+        }
+
+
+        @Override
+        public void write( Kryo kryo, Output output ) {
+            kryo.writeObject( output, rowType );
+            kryo.writeObject( output, tuples );
+        }
+
+
+        @Override
+        public void read( Kryo kryo, Input input ) {
+            rowType = kryo.readObject( input, AlgRecordType.class );
+            tuples = kryo.readObject( input, ImmutableList.class );
         }
 
     }

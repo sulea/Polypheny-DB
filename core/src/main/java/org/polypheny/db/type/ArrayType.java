@@ -34,6 +34,10 @@
 package org.polypheny.db.type;
 
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.Serializer;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import java.util.Objects;
 import lombok.Getter;
 import lombok.Setter;
@@ -157,6 +161,30 @@ public class ArrayType extends AbstractPolyType {
                 return getComponentType().getPrecedenceList().compareTypePrecedence( type1.getComponentType(), type2.getComponentType() );
             }
         };
+    }
+
+
+    public static class ArrayTypeSerializer extends Serializer<ArrayType> {
+
+        @Override
+        public void write( Kryo kryo, Output output, ArrayType object ) {
+            kryo.writeClassAndObject( output, object.elementType );
+            output.writeBoolean( object.isNullable );
+            output.writeLong( object.cardinality );
+            output.writeLong( object.dimension );
+        }
+
+
+        @Override
+        public ArrayType read( Kryo kryo, Input input, Class<? extends ArrayType> type ) {
+            final AlgDataType t = (AlgDataType) kryo.readClassAndObject( input );
+            final boolean nullable = input.readBoolean();
+            final long cardinality = input.readLong();
+            final long dimension = input.readLong();
+
+            return new ArrayType( t, nullable, cardinality, dimension );
+        }
+
     }
 
 }

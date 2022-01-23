@@ -34,6 +34,10 @@
 package org.polypheny.db.rex;
 
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.Serializer;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import java.util.Objects;
 import org.polypheny.db.algebra.constant.Kind;
 import org.polypheny.db.algebra.core.CorrelationId;
@@ -88,6 +92,26 @@ public class RexCorrelVariable extends RexVariable {
     @Override
     public int hashCode() {
         return Objects.hash( digest, type, id );
+    }
+
+
+    public static class RexCorrelVariableSerializer extends Serializer<RexCorrelVariable> {
+
+        @Override
+        public void write( Kryo kryo, Output output, RexCorrelVariable object ) {
+            kryo.writeObject( output, object.type );
+            kryo.writeObject( output, object.id );
+        }
+
+
+        @Override
+        public RexCorrelVariable read( Kryo kryo, Input input, Class<? extends RexCorrelVariable> type ) {
+            final AlgDataType t = kryo.readObject( input, AlgDataType.class );
+            final CorrelationId id = kryo.readObject( input, CorrelationId.class );
+
+            return new RexCorrelVariable( id, t );
+        }
+
     }
 
 }

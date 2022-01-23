@@ -34,6 +34,10 @@
 package org.polypheny.db.type;
 
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.Serializer;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import com.google.common.base.Preconditions;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
@@ -328,6 +332,46 @@ public class BasicPolyType extends AbstractPolyType {
         int precision = typeName.allowsPrec() ? this.getPrecision() : -1;
         int scale = typeName.allowsScale() ? this.getScale() : -1;
         return typeName.getLimit( sign, limit, beyond, precision, scale );
+    }
+
+
+    public static class BasicPolyTypeSerializer extends Serializer<BasicPolyType> {
+
+        @Override
+        public void write( Kryo kryo, Output output, BasicPolyType object ) {
+            output.writeBoolean( object.scale != SCALE_NOT_SPECIFIED );
+            output.write( object.scale );
+            output.writeBoolean( object.precision != PRECISION_NOT_SPECIFIED );
+            output.write( object.precision );
+
+            output.writeBoolean( object.isNullable );
+            kryo.writeObjectOrNull( output, object.typeName, PolyType.class );
+            kryo.writeObjectOrNull( output, object.collation, Collation.class );
+            kryo.writeObjectOrNull( output, object.wrappedCharset, SerializableCharset.class );
+        }
+
+
+        @Override
+        public BasicPolyType read( Kryo kryo, Input input, Class<? extends BasicPolyType> type ) {
+            final boolean scaleSpecified = input.readBoolean();
+            final int scale = input.read();
+            final boolean precisionSpecified = input.readBoolean();
+            final int precision = input.read();
+            final boolean nullable = input.readBoolean();
+            final PolyType typeName = kryo.readObjectOrNull( input, PolyType.class );
+            final Collation collation = kryo.readObjectOrNull( input, Collation.class );
+            final SerializableCharset charset = kryo.readObjectOrNull( input, SerializableCharset.class );
+
+            return new BasicPolyType(
+                    AlgDataTypeSystem.DEFAULT,
+                    typeName,
+                    nullable,
+                    precisionSpecified ? precision : PRECISION_NOT_SPECIFIED,
+                    scaleSpecified ? scale : SCALE_NOT_SPECIFIED,
+                    collation,
+                    charset );
+        }
+
     }
 
 }

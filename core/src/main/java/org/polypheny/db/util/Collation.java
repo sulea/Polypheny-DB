@@ -18,6 +18,10 @@ package org.polypheny.db.util;
 
 import static org.polypheny.db.util.Static.RESOURCE;
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.Serializer;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import java.io.Serializable;
 import java.nio.charset.Charset;
 import java.util.Locale;
@@ -192,6 +196,26 @@ public class Collation implements Serializable {
          * Weakest coercibility.
          */
         NONE
+    }
+
+
+    public static class CollationSerializer extends Serializer<Collation> {
+
+        @Override
+        public void write( Kryo kryo, Output output, Collation object ) {
+            //output.writeString( object.collationName );
+            kryo.writeObject( output, object.coercibility );
+        }
+
+
+        @Override
+        public Collation read( Kryo kryo, Input input, Class<? extends Collation> type ) {
+            //final String collationName = input.readString();
+            final Coercibility coercibility = kryo.readObject( input, Coercibility.class );
+
+            return new Collation( coercibility );
+        }
+
     }
 
 }

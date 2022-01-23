@@ -33,8 +33,14 @@
 
 package org.polypheny.db.rex;
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.Serializer;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
@@ -47,6 +53,7 @@ import org.polypheny.db.algebra.constant.Syntax;
 import org.polypheny.db.algebra.operators.OperatorName;
 import org.polypheny.db.algebra.type.AlgDataType;
 import org.polypheny.db.algebra.type.AlgDataTypeFactory;
+import org.polypheny.db.languages.OperatorRegistry;
 import org.polypheny.db.nodes.Node;
 import org.polypheny.db.nodes.Operator;
 import org.polypheny.db.type.PolyType;
@@ -279,6 +286,28 @@ public class RexCall extends RexNode {
         } else {
             return toString().hashCode();
         }
+    }
+
+
+    public static class RexCallSerializer extends Serializer<RexCall> {
+
+        @Override
+        public void write( Kryo kryo, Output output, RexCall object ) {
+            output.writeString( object.op.getOperatorName().name() );
+            kryo.writeClassAndObject( output, object.type );
+            kryo.writeObjectOrNull( output, Lists.newArrayList( object.operands ), ArrayList.class );
+        }
+
+
+        @Override
+        public RexCall read( Kryo kryo, Input input, Class<? extends RexCall> type ) {
+            final Operator operator = OperatorRegistry.get( OperatorName.valueOf( input.readString() ) );
+            final AlgDataType dataType = (AlgDataType) kryo.readClassAndObject( input );
+            final List<RexNode> operands = kryo.readObjectOrNull( input, ArrayList.class );
+
+            return new RexCall( dataType, operator, operands );
+        }
+
     }
 
 }

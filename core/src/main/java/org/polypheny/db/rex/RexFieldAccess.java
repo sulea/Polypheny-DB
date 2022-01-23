@@ -34,6 +34,10 @@
 package org.polypheny.db.rex;
 
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.Serializer;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import org.polypheny.db.algebra.constant.Kind;
 import org.polypheny.db.algebra.type.AlgDataType;
 import org.polypheny.db.algebra.type.AlgDataTypeField;
@@ -134,6 +138,26 @@ public class RexFieldAccess extends RexNode {
         int result = expr.hashCode();
         result = 31 * result + field.hashCode();
         return result;
+    }
+
+
+    public static class RexFieldAccessSerializer extends Serializer<RexFieldAccess> {
+
+        @Override
+        public void write( Kryo kryo, Output output, RexFieldAccess object ) {
+            kryo.writeObject( output, object.expr );
+            kryo.writeObject( output, object.field );
+        }
+
+
+        @Override
+        public RexFieldAccess read( Kryo kryo, Input input, Class<? extends RexFieldAccess> type ) {
+            final RexNode expr = kryo.readObject( input, RexNode.class );
+            final AlgDataTypeField field = kryo.readObject( input, AlgDataTypeField.class );
+
+            return new RexFieldAccess( expr, field );
+        }
+
     }
 
 }

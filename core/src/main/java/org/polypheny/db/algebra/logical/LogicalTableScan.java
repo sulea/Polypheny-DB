@@ -34,10 +34,11 @@
 package org.polypheny.db.algebra.logical;
 
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import com.google.common.collect.ImmutableList;
-import java.io.IOException;
-import java.io.ObjectInput;
-import java.io.ObjectOutput;
+import com.google.common.collect.Lists;
 import java.util.List;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -170,21 +171,20 @@ public final class LogicalTableScan extends TableScan {
 
 
         @Override
-        public void writeExternal( ObjectOutput out ) throws IOException {
-            out.writeObject( names );
-        }
-
-
-        @SuppressWarnings("unchecked")
-        @Override
-        public void readExternal( ObjectInput in ) throws IOException, ClassNotFoundException {
-            names = (List<String>) in.readObject();
-        }
-
-
-        @Override
         public void accept( SerializableActivator activator ) {
             activator.visit( this );
+        }
+
+
+        @Override
+        public void write( Kryo kryo, Output output ) {
+            kryo.writeClassAndObject( output, Lists.newArrayList( names ) );
+        }
+
+
+        @Override
+        public void read( Kryo kryo, Input input ) {
+            names = (List<String>) kryo.readClassAndObject( input );
         }
 
     }
