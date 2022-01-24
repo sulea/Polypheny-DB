@@ -239,6 +239,7 @@ public enum BuiltInMethod {
     ITERATOR_NEXT( Iterator.class, "next" ),
     MATH_MAX( Math.class, "max", int.class, int.class ),
     MATH_MIN( Math.class, "min", int.class, int.class ),
+    IN( Functions.class, "in", Object.class, List.class ),
     SORTED_MULTI_MAP_PUT_MULTI( SortedMultiMap.class, "putMulti", Object.class, Object.class ),
     SORTED_MULTI_MAP_ARRAYS( SortedMultiMap.class, "arrays", Comparator.class ),
     SORTED_MULTI_MAP_SINGLETON( SortedMultiMap.class, "singletonArrayIterator", Comparator.class, List.class ),

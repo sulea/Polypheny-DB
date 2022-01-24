@@ -74,6 +74,7 @@ import org.polypheny.db.algebra.rules.CalcRemoveRule;
 import org.polypheny.db.algebra.rules.FilterJoinRule;
 import org.polypheny.db.algebra.rules.JoinAssociateRule;
 import org.polypheny.db.algebra.rules.JoinCommuteRule;
+import org.polypheny.db.algebra.rules.OptimizedJoinRule;
 import org.polypheny.db.algebra.rules.SemiJoinRule;
 import org.polypheny.db.algebra.rules.SortRemoveRule;
 import org.polypheny.db.algebra.rules.UnionToDistinctRule;
@@ -831,6 +832,7 @@ public class VolcanoPlanner extends AbstractRelOptPlanner {
         addRule( AggregateProjectMergeRule.INSTANCE );
         addRule( CalcRemoveRule.INSTANCE );
         addRule( SortRemoveRule.INSTANCE );
+        addRule( OptimizedJoinRule.INSTANCE );
 
         // todo: rule which makes Project({OrdinalRef}) disappear
     }

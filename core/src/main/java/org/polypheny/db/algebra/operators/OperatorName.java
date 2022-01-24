@@ -235,6 +235,11 @@ public enum OperatorName {
     IN( Operator.class ),
 
     /**
+     * <code>IN ?</code> operator tests for a values membership in list of values provided through an array.
+     */
+    IN_ARRAY( Operator.class ),
+
+    /**
      * <code>NOT IN</code> operator tests for a value's membership in a sub-query or a list of values.
      */
     NOT_IN( Operator.class ),

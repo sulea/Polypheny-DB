@@ -1162,16 +1162,16 @@ public class RexLiteral extends RexNode {
 
         @Override
         public void write( Kryo kryo, Output output, RexLiteral object ) {
-            kryo.writeObject( output, object.type );
-            kryo.writeObject( output, object.value );
+            kryo.writeClassAndObject( output, object.type );
+            kryo.writeClassAndObject( output, object.value );
             kryo.writeObject( output, object.typeName );
         }
 
 
         @Override
         public RexLiteral read( Kryo kryo, Input input, Class<? extends RexLiteral> type ) {
-            final AlgDataType t = kryo.readObject( input, AlgDataType.class );
-            final Comparable<?> value = kryo.readObject( input, Comparable.class );
+            final AlgDataType t = (AlgDataType) kryo.readClassAndObject( input );
+            final Comparable<?> value = (Comparable<?>) kryo.readClassAndObject( input );
             final PolyType typeName = kryo.readObject( input, PolyType.class );
 
             return new RexLiteral( value, t, typeName, true );

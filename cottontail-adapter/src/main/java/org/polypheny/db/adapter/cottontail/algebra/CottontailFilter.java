@@ -206,6 +206,11 @@ public class CottontailFilter extends Filter implements CottontailAlg {
                     return translateBinary( ComparisonOperator.GREATER, ComparisonOperator.LEQUAL, (RexCall) node, dynamicParameterMap_, negated );
                 case GREATER_THAN_OR_EQUAL:
                     return translateBinary( ComparisonOperator.GEQUAL, ComparisonOperator.LESS, (RexCall) node, dynamicParameterMap_, negated );
+                case IN:
+                    if ( negated ) {
+                        throw new RuntimeException( "cannot negate IN" );
+                    }
+                    return translateBinary( ComparisonOperator.IN, null, (RexCall) node, dynamicParameterMap_, negated );
                 default:
                     throw new AssertionError( "cannot translate: " + node );
             }

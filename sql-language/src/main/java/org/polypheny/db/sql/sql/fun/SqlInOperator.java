@@ -61,7 +61,7 @@ public class SqlInOperator extends SqlBinaryOperator {
      */
     public SqlInOperator( Kind kind ) {
         this( kind.sql, kind );
-        assert kind == Kind.IN || kind == Kind.NOT_IN;
+        assert kind == Kind.IN || kind == Kind.NOT_IN || kind == Kind.IN_ARRAY;
     }
 
 

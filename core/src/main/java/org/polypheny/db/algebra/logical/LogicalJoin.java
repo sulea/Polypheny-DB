@@ -44,6 +44,7 @@ import java.util.Objects;
 import java.util.Set;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.polypheny.db.algebra.AlgInput;
 import org.polypheny.db.algebra.AlgNode;
 import org.polypheny.db.algebra.AlgShuttle;
@@ -74,6 +75,10 @@ public final class LogicalJoin extends Join {
     @Getter
     // NOTE jvs 14-Mar-2006:  Normally we don't use state like this to control rule firing, but due to the non-local nature of semijoin optimizations, it's pretty much required.
     private final boolean semiJoinDone;
+
+    @Getter
+    @Setter
+    private boolean optimized = false;
 
     private final ImmutableList<AlgDataTypeField> systemFieldList;
 

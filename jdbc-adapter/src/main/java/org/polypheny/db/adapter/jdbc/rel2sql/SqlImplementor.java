@@ -55,6 +55,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.IntFunction;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import javax.annotation.Nonnull;
 import org.apache.calcite.linq4j.Ord;
 import org.apache.calcite.linq4j.tree.Expressions;
@@ -644,10 +646,39 @@ public abstract class SqlImplementor {
                         return (SqlNode) subQuery.getOperator().createCall( POS, op0, sqlSubQuery );
                     } else {
                         final RexCall call = (RexCall) rex;
-                        final List<SqlNode> cols = toSql( program, call.operands );
+                        final List<SqlNode> cols;
+                        if ( call.operands.size() == 2 && call.operands.get( 1 ).isA( Kind.ARRAY_VALUE_CONSTRUCTOR ) ) {
+                            // todo dl change to IN_ARRAY
+                            SqlNode r = toSql( program, call.operands.get( 0 ) );
+                            cols = Stream.concat( Stream.of( r ), toSql( program, ((RexCall) call.operands.get( 1 )).operands ).stream() ).collect( Collectors.toList() );
+                        } else {
+                            cols = toSql( program, call.operands );
+                        }
+
                         return (SqlNode) call.getOperator().createCall( POS, cols.get( 0 ), new SqlNodeList( cols.subList( 1, cols.size() ), POS ) );
                     }
+                case IN_ARRAY:
+                    if ( rex instanceof RexSubQuery ) {
+                        subQuery = (RexSubQuery) rex;
+                        sqlSubQuery = implementor().visitChild( 0, subQuery.alg ).asQueryOrValues();
+                        final List<RexNode> operands = subQuery.operands;
+                        Node op0;
+                        if ( operands.size() == 1 ) {
+                            op0 = toSql( program, operands.get( 0 ) );
+                        } else {
+                            final List<SqlNode> cols = toSql( program, operands );
+                            op0 = new SqlNodeList( cols, POS );
+                        }
+                        return (SqlNode) subQuery.getOperator().createCall( POS, op0, sqlSubQuery );
+                    } else {
+                        final RexCall call = (RexCall) rex;
+                        final List<SqlNode> cols;
 
+                        SqlNode r = toSql( program, call.operands.get( 0 ) );
+                        cols = Stream.concat( Stream.of( r ), toSql( program, ((RexCall) call.operands.get( 1 )).operands ).stream() ).collect( Collectors.toList() );
+
+                        return (SqlNode) call.getOperator().createCall( POS, cols.get( 0 ), new SqlNodeList( cols.subList( 1, cols.size() ), POS ) );
+                    }
                 case EXISTS:
                 case SCALAR_QUERY:
                     subQuery = (RexSubQuery) rex;

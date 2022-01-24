@@ -455,6 +455,8 @@ public class SqlRegisterer {
          */
         register( OperatorName.IN, new SqlInOperator( Kind.IN ) );
 
+        register( OperatorName.IN_ARRAY, new SqlInOperator( Kind.IN_ARRAY ) );
+
         /**
          * <code>NOT IN</code> operator tests for a value's membership in a sub-query or a list of values.
          */

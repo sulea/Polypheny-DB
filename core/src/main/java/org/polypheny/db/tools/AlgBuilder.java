@@ -42,10 +42,12 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Streams;
 import java.math.BigDecimal;
 import java.util.AbstractList;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
@@ -58,6 +60,7 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import javax.annotation.Nonnull;
 import lombok.Getter;
 import org.apache.calcite.linq4j.Ord;
@@ -2531,6 +2534,26 @@ public class AlgBuilder {
     public AlgBuilder calc( RexProgram program ) {
         stack.push( new Frame( LogicalCalc.create( stack.pop().alg, program ) ) );
         return this;
+    }
+
+
+    public RexNode in( RexNode field, RexNode... nodes ) {
+        return in_( OperatorName.IN, field, nodes );
+    }
+
+
+    public RexNode inArray( RexNode field, RexNode... nodes ) {
+        return in_( OperatorName.IN_ARRAY, field, nodes );
+    }
+
+
+    public RexNode in_( OperatorName operatorName, RexNode field, RexNode... nodes ) {
+        return in_( operatorName, Streams.concat( Stream.of( field ), Arrays.stream( nodes ) ).collect( Collectors.toList() ) );
+    }
+
+
+    private RexNode in_( OperatorName name, List<RexNode> nodes ) {
+        return call( OperatorRegistry.get( name ), nodes );
     }
 
 

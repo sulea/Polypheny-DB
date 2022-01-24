@@ -120,7 +120,7 @@ public class RexCall extends RexNode {
             if ( (isA( Kind.AND ) || isA( Kind.OR )) && operand.getType().getPolyType() == PolyType.BOOLEAN ) {
                 includeType = RexDigestIncludeType.NO_TYPE;
             }
-            if ( SIMPLE_BINARY_OPS.contains( getKind() ) ) {
+            if ( SIMPLE_BINARY_OPS.contains( getKind() ) && op.getOperatorName() != OperatorName.IN ) {
                 RexNode otherArg = operands.get( 1 - i );
                 if ( (!(otherArg instanceof RexLiteral) || ((RexLiteral) otherArg).digestIncludesType() == RexDigestIncludeType.NO_TYPE) && equalSansNullability( operand.getType(), otherArg.getType() ) ) {
                     includeType = RexDigestIncludeType.NO_TYPE;

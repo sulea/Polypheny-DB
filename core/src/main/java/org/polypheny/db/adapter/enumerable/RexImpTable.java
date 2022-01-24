@@ -249,6 +249,8 @@ public class RexImpTable {
         final MethodImplementor similarImplementor = new MethodImplementor( BuiltInMethod.SIMILAR.method );
         defineImplementor( OperatorRegistry.get( OperatorName.SIMILAR_TO ), NullPolicy.STRICT, similarImplementor, false );
         defineImplementor( OperatorRegistry.get( OperatorName.NOT_SIMILAR_TO ), NullPolicy.STRICT, NotImplementor.of( similarImplementor ), false );
+        defineImplementor( OperatorRegistry.get( OperatorName.IN ), NullPolicy.STRICT, new MethodImplementor( BuiltInMethod.IN.method ), false );
+        defineImplementor( OperatorRegistry.get( OperatorName.IN_ARRAY ), NullPolicy.STRICT, new MethodImplementor( BuiltInMethod.IN.method ), false );
 
         // Multisets & arrays
         defineMethod( OperatorRegistry.get( OperatorName.CARDINALITY ), BuiltInMethod.COLLECTION_SIZE.method, NullPolicy.STRICT );

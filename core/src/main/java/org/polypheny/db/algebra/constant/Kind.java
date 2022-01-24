@@ -286,6 +286,10 @@ public enum Kind {
      * The "IN" operator.
      */
     IN,
+    /**
+     * The "IN" operator able to deal with a collection of values
+     */
+    IN_ARRAY,
 
     /**
      * The "NOT IN" operator.

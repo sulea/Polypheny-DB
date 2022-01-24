@@ -273,6 +273,11 @@ public class Functions {
     }
 
 
+    public static <T> boolean in( T val, List<T> values ) {
+        return values.contains( val );
+    }
+
+
     /**
      * @param mm Multimedia object
      * @param dirName Name of the metadata directory
