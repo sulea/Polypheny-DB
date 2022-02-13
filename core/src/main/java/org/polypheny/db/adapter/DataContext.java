@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
 import java.util.concurrent.atomic.AtomicBoolean;
+import javax.annotation.Nonnull;
 import lombok.Data;
 import org.apache.calcite.linq4j.QueryProvider;
 import org.apache.calcite.linq4j.tree.Expressions;
@@ -74,7 +75,7 @@ public interface DataContext {
     Statement getStatement();
 
 
-    void addParameterValues( long index, AlgDataType type, List<Object> data );
+    void addParameterValues( long index, @Nonnull AlgDataType type, List<Object> data );
 
     AlgDataType getParameterType( long index );
 
@@ -89,6 +90,10 @@ public interface DataContext {
             throw new RuntimeException( "Illegal number of parameter sets" );
         }
         return getParameterValues().get( 0 ).get( index );
+    }
+
+    default Map<Long, AlgDataType> getParameterTypes() {
+        throw new UnsupportedOperationException();
     }
 
 
@@ -218,7 +223,7 @@ public interface DataContext {
 
 
         @Override
-        public void addParameterValues( long index, AlgDataType type, List<Object> data ) {
+        public void addParameterValues( long index, @Nonnull AlgDataType type, List<Object> data ) {
 
         }
 
@@ -231,6 +236,12 @@ public interface DataContext {
 
         @Override
         public List<Map<Long, Object>> getParameterValues() {
+            return null;
+        }
+
+
+        @Override
+        public Map<Long, AlgDataType> getParameterTypes() {
             return null;
         }
 

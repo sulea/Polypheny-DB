@@ -495,7 +495,7 @@ public class DataMigratorImpl implements DataMigrator {
                     }
                 }
                 for ( Map.Entry<Long, List<Object>> v : values.entrySet() ) {
-                    targetStatement.getDataContext().addParameterValues( v.getKey(), null, v.getValue() );
+                    targetStatement.getDataContext().addParameterValues( v.getKey(), result.getRowType().getFieldList().get( Math.toIntExact( v.getKey() ) ).getType(), v.getValue() );
                 }
                 Iterator<?> iterator = targetStatement.getQueryProcessor()
                         .prepareQuery( targetAlg, sourceAlg.validatedRowType, true, false, true )
@@ -652,7 +652,7 @@ public class DataMigratorImpl implements DataMigrator {
 
                     for ( Map.Entry<Long, List<Object>> columnDataOnPartition : values.entrySet() ) {
                         // Check partitionValue
-                        currentTargetStatement.getDataContext().addParameterValues( columnDataOnPartition.getKey(), null, columnDataOnPartition.getValue() );
+                        currentTargetStatement.getDataContext().addParameterValues( columnDataOnPartition.getKey(), result.getRowType().getFieldList().get( Math.toIntExact( columnDataOnPartition.getKey() ) ).getType(), columnDataOnPartition.getValue() );
                     }
 
                     Iterator iterator = currentTargetStatement.getQueryProcessor()

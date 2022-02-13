@@ -37,6 +37,9 @@ package org.polypheny.db.util;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
+import com.google.gson.TypeAdapter;
+import com.google.gson.stream.JsonReader;
+import com.google.gson.stream.JsonWriter;
 import java.io.Externalizable;
 import java.io.IOException;
 import java.io.ObjectInput;
@@ -46,6 +49,7 @@ import java.nio.charset.CharacterCodingException;
 import java.nio.charset.Charset;
 import java.nio.charset.CharsetDecoder;
 import java.nio.charset.IllegalCharsetNameException;
+import java.nio.charset.StandardCharsets;
 import java.nio.charset.UnsupportedCharsetException;
 import java.util.List;
 import java.util.Locale;
@@ -316,6 +320,23 @@ public class NlsString implements Comparable<NlsString>, Cloneable, Externalizab
         charsetName = in.readUTF();
         charset = ((SerializableCharset) in.readObject()).getCharset();
         collation = (Collation) in.readObject();
+    }
+
+
+    public static class NlsNormalizeSerializer extends TypeAdapter<NlsString> {
+
+
+        @Override
+        public void write( JsonWriter out, NlsString value ) throws IOException {
+            out.value( value.getValue() );
+        }
+
+
+        @Override
+        public NlsString read( JsonReader in ) throws IOException {
+            return new NlsString( in.nextString(), StandardCharsets.UTF_8.name(), Collation.IMPLICIT );
+        }
+
     }
 
 }

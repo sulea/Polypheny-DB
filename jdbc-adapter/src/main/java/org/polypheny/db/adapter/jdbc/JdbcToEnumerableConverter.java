@@ -54,7 +54,7 @@ import org.apache.calcite.linq4j.tree.Primitive;
 import org.apache.calcite.linq4j.tree.Types;
 import org.apache.calcite.linq4j.tree.UnaryExpression;
 import org.polypheny.db.adapter.DataContext;
-import org.polypheny.db.adapter.enumerable.EnumerableAlg;
+import org.polypheny.db.adapter.enumerable.EnumerableAdapterAlg;
 import org.polypheny.db.adapter.enumerable.EnumerableAlgImplementor;
 import org.polypheny.db.adapter.enumerable.JavaRowFormat;
 import org.polypheny.db.adapter.enumerable.PhysType;
@@ -84,13 +84,14 @@ import org.polypheny.db.transaction.Transaction.MultimediaFlavor;
 import org.polypheny.db.type.ArrayType;
 import org.polypheny.db.type.PolyType;
 import org.polypheny.db.type.PolyTypeFamily;
+import org.polypheny.db.type.TypeMapping;
 import org.polypheny.db.util.BuiltInMethod;
 
 
 /**
  * Relational expression representing a scan of a table in a JDBC data source.
  */
-public class JdbcToEnumerableConverter extends ConverterImpl implements EnumerableAlg {
+public class JdbcToEnumerableConverter extends ConverterImpl implements EnumerableAdapterAlg {
 
     public static final Method JDBC_SCHEMA_GET_CONNECTION_HANDLER_METHOD = Types.lookupMethod(
             JdbcSchema.class,
@@ -138,7 +139,7 @@ public class JdbcToEnumerableConverter extends ConverterImpl implements Enumerab
 
 
     @Override
-    public Result implement( EnumerableAlgImplementor implementor, Prefer pref ) {
+    public Result implementInternal( EnumerableAlgImplementor implementor, Prefer pref ) {
         // Generate:
         //   ResultSetEnumerable.of(schema.getDataSource(), "select ...")
         final BlockBuilder builder0 = new BlockBuilder( false );
@@ -251,6 +252,12 @@ public class JdbcToEnumerableConverter extends ConverterImpl implements Enumerab
                                 DataContext.ROOT ) ) );
         builder0.add( Expressions.return_( null, enumerable ) );
         return implementor.result( physType, builder0.toBlock() );
+    }
+
+
+    @Override
+    public TypeMapping<?> getMapping() {
+        return JdbcTypeMapping.INSTANCE;
     }
 
 

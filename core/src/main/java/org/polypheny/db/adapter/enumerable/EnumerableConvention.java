@@ -99,5 +99,55 @@ public enum EnumerableConvention implements Convention {
     public boolean useAbstractConvertersForConversion( AlgTraitSet fromTraits, AlgTraitSet toTraits ) {
         return false;
     }
+
+
+    public enum ExternalConvention implements Convention {
+        INSTANCE;
+
+        public static final double COST_MULTIPLIER = 1.0d;
+
+
+        @Override
+        public AlgTraitDef getTraitDef() {
+            return ConventionTraitDef.INSTANCE;
+        }
+
+
+        @Override
+        public boolean satisfies( AlgTrait trait ) {
+            return this == trait;
+        }
+
+
+        @Override
+        public void register( AlgOptPlanner planner ) {
+
+        }
+
+
+        @Override
+        public Class getInterface() {
+            return EnumerableAlg.class;
+        }
+
+
+        @Override
+        public String getName() {
+            return "EXTERNAL";
+        }
+
+
+        @Override
+        public boolean canConvertConvention( Convention toConvention ) {
+            return false;
+        }
+
+
+        @Override
+        public boolean useAbstractConvertersForConversion( AlgTraitSet fromTraits, AlgTraitSet toTraits ) {
+            return false;
+        }
+
+    }
 }
 

@@ -24,9 +24,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PushbackInputStream;
-import java.sql.Date;
-import java.sql.Time;
-import java.sql.Timestamp;
 import java.util.Arrays;
 import java.util.Map;
 import org.polypheny.db.adapter.DataContext;
@@ -39,7 +36,11 @@ import org.polypheny.db.rex.RexDynamicParam;
 import org.polypheny.db.rex.RexNode;
 import org.polypheny.db.rex.RexShuttle;
 import org.polypheny.db.type.PolyType;
+import org.polypheny.db.util.DateString;
 import org.polypheny.db.util.FileInputHandle;
+import org.polypheny.db.util.NlsString;
+import org.polypheny.db.util.TimeString;
+import org.polypheny.db.util.TimestampString;
 
 
 public class ParameterValueValidator extends AlgShuttleImpl {
@@ -105,19 +106,19 @@ public class ParameterValueValidator extends AlgShuttleImpl {
                     //case ANY:
                     //break;
                     case CHARACTER:
-                        valid = o instanceof String || o instanceof Character || o instanceof Character[];
+                        valid = o instanceof NlsString;
                         break;
                     case NUMERIC:
                         valid = o instanceof Number;
                         break;
                     case DATE:
-                        valid = o instanceof Date || o instanceof Integer;
+                        valid = o instanceof DateString;
                         break;
                     case TIME:
-                        valid = o instanceof Time || o instanceof Integer;
+                        valid = o instanceof TimeString;
                         break;
                     case TIMESTAMP:
-                        valid = o instanceof Timestamp || o instanceof Long;
+                        valid = o instanceof TimestampString;
                         break;
                     case BOOLEAN:
                         valid = o instanceof Boolean;

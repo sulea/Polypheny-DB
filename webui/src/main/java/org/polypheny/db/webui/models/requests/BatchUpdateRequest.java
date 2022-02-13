@@ -77,7 +77,7 @@ public class BatchUpdateRequest {
                 } else if ( value == null ) {// && fileName != null
                     if ( catalogColumn.type.getFamily() == PolyTypeFamily.MULTIMEDIA ) {
                         setClauses.add( String.format( "\"%s\"=?", entry.getKey() ) );
-                        statement.getDataContext().addParameterValues( counter++, null, ImmutableList.of( httpRequest.getPart( fileName ).getInputStream() ) );
+                        statement.getDataContext().addParameterValues( counter++, catalogColumn.getAlgDataType( statement.getDataContext().getTypeFactory() ), ImmutableList.of( httpRequest.getPart( fileName ).getInputStream() ) );
                     } else {
                         String data = IOUtils.toString( httpRequest.getPart( fileName ).getInputStream(), StandardCharsets.UTF_8 );
                         setClauses.add( String.format( "\"%s\"=%s", entry.getKey(), Crud.uiValueToSql( data, catalogColumn.type, catalogColumn.collectionsType ) ) );

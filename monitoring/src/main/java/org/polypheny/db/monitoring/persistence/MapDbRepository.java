@@ -58,13 +58,13 @@ public class MapDbRepository implements PersistentMonitoringRepository {
 
     @Override
     public void dataPoint( @NonNull MonitoringDataPoint dataPoint ) {
-        BTreeMap table = this.data.get( dataPoint.getClass() );
+        BTreeMap<UUID, MonitoringDataPoint> table = this.data.get( dataPoint.getClass() );
         if ( table == null ) {
             this.createPersistentTable( dataPoint.getClass() );
             table = this.data.get( dataPoint.getClass() );
         }
 
-        if ( table != null && dataPoint != null ) {
+        if ( table != null ) {
             table.put( dataPoint.id(), dataPoint );
             this.simpleBackendDb.commit();
         }

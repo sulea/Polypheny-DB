@@ -46,6 +46,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import javax.annotation.Nonnull;
 import org.apache.calcite.linq4j.Enumerable;
 import org.apache.calcite.linq4j.QueryProvider;
 import org.apache.calcite.linq4j.Queryable;
@@ -555,7 +556,7 @@ public final class Schemas {
 
 
         @Override
-        public void addParameterValues( long index, AlgDataType type, List<Object> data ) {
+        public void addParameterValues( long index, @Nonnull AlgDataType type, List<Object> data ) {
             throw new UnsupportedOperationException();
         }
 

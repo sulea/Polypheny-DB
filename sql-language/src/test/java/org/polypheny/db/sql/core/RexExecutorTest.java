@@ -31,6 +31,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.function.Function;
+import javax.annotation.Nonnull;
 import org.apache.calcite.avatica.util.ByteString;
 import org.apache.calcite.linq4j.QueryProvider;
 import org.junit.Assert;
@@ -391,7 +392,7 @@ public class RexExecutorTest extends SqlLanguagelDependant {
 
 
         @Override
-        public void addParameterValues( long index, AlgDataType type, List<Object> data ) {
+        public void addParameterValues( long index, @Nonnull AlgDataType type, List<Object> data ) {
             throw new UnsupportedOperationException();
         }
 

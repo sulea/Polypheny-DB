@@ -206,7 +206,7 @@ class MongoEnumerator implements Enumerator<Object> {
     }
 
 
-    static Function1<Document, Object> singletonGetter( final String fieldName, final Class fieldClass, Class arrayFieldClass ) {
+    static Function1<Document, Object> singletonGetter( final String fieldName, final Class<?> fieldClass, Class<?> arrayFieldClass ) {
         return a0 -> {
             Object obj = convert( a0.get( fieldName ), fieldClass );
             if ( fieldClass == List.class ) {
@@ -252,7 +252,7 @@ class MongoEnumerator implements Enumerator<Object> {
     }
 
 
-    private static Object convert( Object o, Class clazz ) {
+    private static Object convert( Object o, Class<?> clazz ) {
         if ( o == null ) {
             return null;
         }

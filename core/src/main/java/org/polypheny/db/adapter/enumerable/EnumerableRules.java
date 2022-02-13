@@ -106,5 +106,7 @@ public class EnumerableRules {
 
     public static final EnumerableTableFunctionScanRule ENUMERABLE_TABLE_FUNCTION_SCAN_RULE = new EnumerableTableFunctionScanRule( AlgFactories.LOGICAL_BUILDER );
 
+    public static final ExternalTypeConverterRule EXTERNAL_TYPE_CONVERTER_RULE = new ExternalTypeConverterRule( AlgFactories.LOGICAL_BUILDER );
+
 }
 

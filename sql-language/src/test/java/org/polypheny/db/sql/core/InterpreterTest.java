@@ -25,6 +25,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import javax.annotation.Nonnull;
 import org.apache.calcite.linq4j.QueryProvider;
 import org.junit.After;
 import org.junit.Before;
@@ -113,7 +114,7 @@ public class InterpreterTest extends SqlLanguagelDependant {
 
 
         @Override
-        public void addParameterValues( long index, AlgDataType type, List<Object> data ) {
+        public void addParameterValues( long index, @Nonnull AlgDataType type, List<Object> data ) {
             throw new UnsupportedOperationException();
         }
 

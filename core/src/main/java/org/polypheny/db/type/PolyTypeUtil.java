@@ -43,8 +43,6 @@ import java.lang.reflect.Type;
 import java.math.BigDecimal;
 import java.nio.charset.Charset;
 import java.sql.Date;
-import java.sql.Time;
-import java.sql.Timestamp;
 import java.util.AbstractList;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -69,6 +67,8 @@ import org.polypheny.db.rex.RexUtil;
 import org.polypheny.db.util.Collation;
 import org.polypheny.db.util.NumberUtil;
 import org.polypheny.db.util.Pair;
+import org.polypheny.db.util.TimeString;
+import org.polypheny.db.util.TimestampString;
 import org.polypheny.db.util.Util;
 import org.polypheny.db.util.ValidatorUtil;
 
@@ -1306,9 +1306,11 @@ public abstract class PolyTypeUtil {
             case DATE:
                 return Date.class;
             case TIME:
-                return Time.class;
+                //return Time.class;
+                return TimeString.class;
             case TIMESTAMP:
-                return Timestamp.class;
+                //return Timestamp.class;
+                return TimestampString.class;
             case CHAR:
                 return char.class;
             case VARCHAR:

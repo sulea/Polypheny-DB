@@ -1228,7 +1228,7 @@ public class Crud implements InformationObserver {
             } else {
                 setStatements.add( String.format( "\"%s\" = ?", catalogColumn.name ) );
                 FileInputHandle fih = new FileInputHandle( statement, part.getInputStream() );
-                statement.getDataContext().addParameterValues( i++, null, ImmutableList.of( fih ) );
+                statement.getDataContext().addParameterValues( i++, catalogColumn.getAlgDataType( statement.getDataContext().getTypeFactory() ), ImmutableList.of( fih ) );
             }
         }
 

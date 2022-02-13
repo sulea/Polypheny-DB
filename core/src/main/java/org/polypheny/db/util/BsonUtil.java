@@ -20,13 +20,8 @@ import com.mongodb.client.gridfs.GridFSBucket;
 import java.io.InputStream;
 import java.io.PushbackInputStream;
 import java.math.BigDecimal;
-import java.sql.Date;
-import java.sql.Time;
-import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Calendar;
-import java.util.GregorianCalendar;
 import java.util.List;
 import java.util.function.Function;
 import java.util.regex.Matcher;
@@ -34,6 +29,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.apache.calcite.avatica.util.ByteString;
 import org.bson.BsonArray;
+import org.bson.BsonBinary;
 import org.bson.BsonBoolean;
 import org.bson.BsonDecimal128;
 import org.bson.BsonDocument;
@@ -171,20 +167,14 @@ public class BsonUtil {
         }
         switch ( type ) {
             case BIGINT:
-                return handleBigInt( obj );
             case DECIMAL:
-                return handleDecimal( obj );
             case TINYINT:
-                return handleTinyInt( obj );
             case SMALLINT:
-                return handleSmallInt( obj );
             case INTEGER:
-                return handleInteger( obj );
             case FLOAT:
             case REAL:
-                return new BsonDouble( Double.parseDouble( obj.toString() ) );
             case DOUBLE:
-                return handleDouble( obj );
+                return handleBigDecimal( obj );
             case DATE:
                 return handleDate( obj );
             case TIME:
@@ -193,26 +183,34 @@ public class BsonUtil {
                 return handleTimestamp( obj );
             case BOOLEAN:
                 return new BsonBoolean( (Boolean) obj );
-            case BINARY:
-                return new BsonString( ((ByteString) obj).toBase64String() );
             case SOUND:
             case IMAGE:
             case VIDEO:
             case FILE:
                 return handleMultimedia( bucket, (InputStream) obj );
             case INTERVAL_MONTH:
-                return handleMonthInterval( obj );
             case INTERVAL_DAY:
-                return handleDayInterval( obj );
             case INTERVAL_YEAR:
-                return handleYearInterval( obj );
+                return handleLong( obj );
             case JSON:
                 return handleDocument( obj );
             case CHAR:
             case VARCHAR:
+            case VARBINARY:
+            case BINARY:
             default:
-                return new BsonString( obj.toString() );
+                return handleString( obj );
         }
+    }
+
+
+    private static BsonBinary handleBinary( Object obj ) {
+        return new BsonBinary( ((ByteString) obj).getBytes() );
+    }
+
+
+    private static BsonValue handleString( Object obj ) {
+        return new BsonString( ((NlsString) obj).getValue() );
     }
 
 
@@ -251,20 +249,14 @@ public class BsonUtil {
     private static Function<Object, BsonValue> getBsonTransformerPrimitive( PolyType type, GridFSBucket bucket ) {
         switch ( type ) {
             case BIGINT:
-                return BsonUtil::handleBigInt;
             case DECIMAL:
-                return BsonUtil::handleDecimal;
             case TINYINT:
-                return BsonUtil::handleTinyInt;
             case SMALLINT:
-                return BsonUtil::handleSmallInt;
             case INTEGER:
-                return BsonUtil::handleInteger;
             case FLOAT:
             case REAL:
-                return ( o ) -> new BsonDouble( Double.parseDouble( o.toString() ) );
             case DOUBLE:
-                return BsonUtil::handleDouble;
+                return BsonUtil::handleBigDecimal;
             case DATE:
                 return BsonUtil::handleDate;
             case TIME:
@@ -273,26 +265,35 @@ public class BsonUtil {
                 return BsonUtil::handleTimestamp;
             case BOOLEAN:
                 return ( o ) -> new BsonBoolean( (Boolean) o );
+            case VARBINARY:
             case BINARY:
-                return ( o ) -> new BsonString( ((ByteString) o).toBase64String() );
+                return BsonUtil::handleBinary;
             case SOUND:
             case IMAGE:
             case VIDEO:
             case FILE:
                 return ( o ) -> handleMultimedia( bucket, (InputStream) o );
             case INTERVAL_MONTH:
-                return BsonUtil::handleMonthInterval;
             case INTERVAL_DAY:
-                return BsonUtil::handleDayInterval;
             case INTERVAL_YEAR:
-                return BsonUtil::handleYearInterval;
+                return BsonUtil::handleLong;
             case JSON:
                 return BsonUtil::handleDocument;
             case CHAR:
             case VARCHAR:
             default:
-                return ( o ) -> new BsonString( o.toString() );
+                return BsonUtil::handleString;
         }
+    }
+
+
+    private static BsonValue handleBigDecimal( Object obj ) {
+        return new BsonDecimal128( new Decimal128( (BigDecimal) obj ) );
+    }
+
+
+    private static BsonValue handleLong( Object obj ) {
+        return new BsonInt64( (Long) obj );
     }
 
 
@@ -389,49 +390,17 @@ public class BsonUtil {
 
 
     private static BsonValue handleDate( Object o ) {
-        if ( o instanceof Integer ) {
-            return new BsonInt64( (Integer) o );
-        } else if ( o instanceof Date ) {
-            return new BsonInt64( ((Date) o).toLocalDate().toEpochDay() );
-        } else if ( o instanceof GregorianCalendar ) {
-            return new BsonInt64( ((GregorianCalendar) o).toZonedDateTime().toLocalDate().toEpochDay() );
-        } else if ( o instanceof DateString ) {
-            return new BsonInt64( ((DateString) o).getDaysSinceEpoch() );
-        } else {
-            return new BsonInt64( new Date( ((Time) o).getTime() ).toLocalDate().toEpochDay() );
-        }
+        return new BsonInt64( ((DateString) o).getDaysSinceEpoch() );
     }
 
 
     private static BsonValue handleTime( Object o ) {
-        if ( o instanceof Integer ) {
-            return new BsonInt64( ((Integer) o) );
-        } else if ( o instanceof GregorianCalendar ) {
-            return new BsonInt64( ((GregorianCalendar) o).toZonedDateTime().toEpochSecond() );
-        } else if ( o instanceof DateString ) {
-            return new BsonInt64( ((DateString) o).toCalendar().getTime().getTime() );
-        } else if ( o instanceof TimeString ) {
-            return new BsonInt64( ((TimeString) o).getMillisOfDay() );
-        } else {
-            return new BsonInt64( ((Time) o).toLocalTime().toNanoOfDay() / 1000000 );
-        }
+        return new BsonInt64( ((TimeString) o).getMillisOfDay() );
     }
 
 
     private static BsonValue handleTimestamp( Object o ) {
-        if ( o instanceof Timestamp ) {
-            // timestamp do factor in the timezones, which means that 10:00 is 9:00 with
-            // an one hour shift, as we lose this timezone information on retrieval
-            // we have to include it into the time itself
-            int offset = Calendar.getInstance().getTimeZone().getRawOffset();
-            return new BsonInt64( ((Timestamp) o).getTime() + offset );
-        } else if ( o instanceof Calendar ) {
-            return new BsonInt64( ((Calendar) o).getTime().getTime() );
-        } else if ( o instanceof TimestampString ) {
-            return new BsonInt64( ((TimestampString) o).getMillisSinceEpoch() );
-        } else {
-            return new BsonInt64( (Long) o );
-        }
+        return new BsonInt64( ((TimestampString) o).getMillisSinceEpoch() );
     }
 
 
@@ -472,11 +441,12 @@ public class BsonUtil {
             return null;
         }
 
+        return el.getValueForQueryParameterizer();
+        /*
         switch ( finalType ) {
             case BOOLEAN:
                 return el.getValueAs( Boolean.class );
             case TINYINT:
-                return el.getValueAs( Byte.class );
             case SMALLINT:
                 return el.getValueAs( Short.class );
             case INTEGER:
@@ -504,7 +474,7 @@ public class BsonUtil {
                 return el.getValueAs( ByteString.class ).toBase64String();
             default:
                 return el.getValue();
-        }
+        }*/
     }
 
 
@@ -540,32 +510,29 @@ public class BsonUtil {
             case BOOLEAN:
                 return Boolean.class;
             case TINYINT:
-                return Short.class;
             case SMALLINT:
             case INTEGER:
-                return Integer.class;
             case BIGINT:
-                return Long.class;
             case DECIMAL:
+            case DOUBLE:
                 return BigDecimal.class;
             case FLOAT:
             case REAL:
                 return Float.class;
-            case DOUBLE:
-                return Double.class;
             case DATE:
-                return Date.class;
+                return DateString.class;
             case TIME:
             case TIME_WITH_LOCAL_TIME_ZONE:
-                return Time.class;
+                return TimeString.class;
             case TIMESTAMP:
             case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
-                return Timestamp.class;
+                return TimestampString.class;
             case CHAR:
             case VARCHAR:
+                return NlsString.class;
             case BINARY:
             case VARBINARY:
-                return String.class;
+                return ByteString.class;
             case FILE:
             case IMAGE:
             case VIDEO:

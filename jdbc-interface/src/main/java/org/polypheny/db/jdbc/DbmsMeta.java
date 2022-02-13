@@ -108,6 +108,7 @@ import org.polypheny.db.transaction.Transaction;
 import org.polypheny.db.transaction.TransactionException;
 import org.polypheny.db.transaction.TransactionManager;
 import org.polypheny.db.type.PolyType;
+import org.polypheny.db.type.PolyTypeMapping;
 import org.polypheny.db.util.LimitIterator;
 import org.polypheny.db.util.Pair;
 
@@ -879,6 +880,7 @@ public class DbmsMeta implements ProtobufMeta {
 
             long[] updateCounts = new long[parameterValues.size()];
             Map<Long, List<Object>> values = new HashMap<>();
+            Map<Long, AlgDataType> types = new HashMap<>();
             for ( UpdateBatch updateBatch : parameterValues ) {
                 List<Common.TypedValue> list = updateBatch.getParameterValuesList();
                 long index = 0;
@@ -886,6 +888,8 @@ public class DbmsMeta implements ProtobufMeta {
                     long i = index++;
                     if ( !values.containsKey( i ) ) {
                         values.put( i, new LinkedList<>() );
+                        TypedValue typed = TypedValue.fromProto( v );
+                        types.put( i, PolyTypeMapping.from( typed.type, typed.componentType ) );
                     }
                     if ( "ARRAY".equals( v.getType().name() ) ) {
                         values.get( i ).add( convertList( (List<Object>) TypedValue.fromProto( v ).toLocal() ) );
@@ -902,7 +906,7 @@ public class DbmsMeta implements ProtobufMeta {
                 }
                 statementHandle.setStatement( connection.getCurrentOrCreateNewTransaction().createStatement() );
                 for ( Entry<Long, List<Object>> valuesList : values.entrySet() ) {
-                    statementHandle.getStatement().getDataContext().addParameterValues( valuesList.getKey(), null, valuesList.getValue() );
+                    statementHandle.getStatement().getDataContext().addParameterValues( valuesList.getKey(), types.get( valuesList.getKey() ), valuesList.getValue() );
                 }
                 prepare( h, statementHandle.getPreparedQuery() );
                 updateCounts[0] = execute( h, connection, statementHandle, -1 ).size();
@@ -1198,7 +1202,7 @@ public class DbmsMeta implements ProtobufMeta {
                 }
                 List<Object> list = new LinkedList<>();
                 list.add( o );
-                statementHandle.getStatement().getDataContext().addParameterValues( index++, null, list );
+                statementHandle.getStatement().getDataContext().addParameterValues( index++, PolyTypeMapping.from( v.type, v.componentType ), list );
             }
         }
 

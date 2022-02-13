@@ -154,7 +154,8 @@ public class Programs {
                     JoinCommuteRule.INSTANCE,
                     JoinPushThroughJoinRule.RIGHT,
                     JoinPushThroughJoinRule.LEFT,
-                    SortProjectTransposeRule.INSTANCE );
+                    SortProjectTransposeRule.INSTANCE,
+                    EnumerableRules.EXTERNAL_TYPE_CONVERTER_RULE );
 
 
     // private constructor for utility class

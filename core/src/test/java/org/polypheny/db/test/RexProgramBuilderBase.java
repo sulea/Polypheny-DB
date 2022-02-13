@@ -41,6 +41,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
+import javax.annotation.Nonnull;
 import org.apache.calcite.linq4j.QueryProvider;
 import org.polypheny.db.adapter.DataContext;
 import org.polypheny.db.adapter.java.JavaTypeFactory;
@@ -153,7 +154,7 @@ public abstract class RexProgramBuilderBase {
 
 
         @Override
-        public void addParameterValues( long index, AlgDataType type, List<Object> data ) {
+        public void addParameterValues( long index, @Nonnull AlgDataType type, List<Object> data ) {
             throw new UnsupportedOperationException();
         }
 

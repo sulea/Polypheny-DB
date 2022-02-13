@@ -403,6 +403,9 @@ public abstract class AbstractQueryProcessor implements QueryProcessor, Executio
             statement.getProcessingDuration().start( "Parameterize" );
         }
 
+        // every proposed plan needs its one DataContext types and parameters,
+        // else the parameterization is not applied for any plan after the first
+        //List<Pair<Map<Long, AlgDataType>, List<Map<Long, Object>>>> proposedContexts = new ArrayList<>();
         // Add optional parameterizedRoots and results for all routed RelRoots.
         // Index of routedRoot, parameterizedRootList and results correspond!
         for ( ProposedRoutingPlan routingPlan : proposedRoutingPlans ) {
@@ -411,6 +414,7 @@ public abstract class AbstractQueryProcessor implements QueryProcessor, Executio
             if ( statement.getDataContext().getParameterValues().size() == 0
                     && (RuntimeConfig.PARAMETERIZE_DML.getBoolean() || !routedRoot.kind.belongsTo( Kind.DML )) ) {
                 Pair<AlgRoot, AlgDataType> parameterized = parameterize( routedRoot, parameterRowType );
+                //proposedContexts.add( Pair.of( statement.getDataContext().getParameterTypes(), statement.getDataContext().getParameterValues() ) );
                 parameterizedRoot = parameterized.left;
             } else {
                 // This query is an execution of a prepared statement

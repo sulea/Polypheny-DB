@@ -21,6 +21,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
+import javax.annotation.Nonnull;
 import lombok.Getter;
 import org.apache.calcite.avatica.AvaticaSite;
 import org.apache.calcite.linq4j.QueryProvider;
@@ -31,6 +32,7 @@ import org.polypheny.db.runtime.Hook;
 import org.polypheny.db.schema.PolyphenyDbSchema;
 import org.polypheny.db.schema.SchemaPlus;
 import org.polypheny.db.transaction.Statement;
+import org.polypheny.db.type.PolyTypeMapping;
 import org.polypheny.db.util.Holder;
 
 
@@ -49,6 +51,7 @@ public class DataContextImpl implements DataContext {
     @Getter
     private final Statement statement;
 
+    @Getter
     private final Map<Long, AlgDataType> parameterTypes; // ParameterIndex -> Data Type
     @Getter
     private final List<Map<Long, Object>> parameterValues; // List of ( ParameterIndex -> Value )
@@ -114,7 +117,7 @@ public class DataContextImpl implements DataContext {
 
 
     @Override
-    public void addParameterValues( long index, AlgDataType type, List<Object> data ) {
+    public void addParameterValues( long index, @Nonnull AlgDataType type, List<Object> data ) {
         if ( parameterTypes.containsKey( index ) ) {
             throw new RuntimeException( "There are already values assigned to this index" );
         }
@@ -129,7 +132,7 @@ public class DataContextImpl implements DataContext {
         parameterTypes.put( index, type );
         int i = 0;
         for ( Object d : data ) {
-            parameterValues.get( i++ ).put( index, d );
+            parameterValues.get( i++ ).put( index, PolyTypeMapping.convertPolyValue( d, type, type.getPolyType() ) );
         }
     }
 

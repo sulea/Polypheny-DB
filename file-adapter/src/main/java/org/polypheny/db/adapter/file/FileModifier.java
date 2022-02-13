@@ -24,6 +24,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.List;
+import org.apache.calcite.avatica.util.ByteString;
 import org.apache.commons.io.IOUtils;
 import org.polypheny.db.adapter.DataContext;
 import org.polypheny.db.adapter.file.FileAlg.FileImplementor.Operation;
@@ -113,7 +114,9 @@ public class FileModifier extends FileEnumerator {
         if ( !newFile.createNewFile() ) {
             throw new RuntimeException( "Primary key conflict! You are trying to insert a row with a primary key that already exists." );
         }
-        if ( value instanceof byte[] ) {
+        if ( value instanceof ByteString ) {
+            Files.write( newFile.toPath(), ((ByteString) value).getBytes() );
+        } else if ( value instanceof byte[] ) {
             Files.write( newFile.toPath(), (byte[]) value );
         } else if ( value instanceof InputStream ) {
             //see https://attacomsian.com/blog/java-convert-inputstream-to-outputstream
