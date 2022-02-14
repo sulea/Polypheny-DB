@@ -36,7 +36,7 @@ public class JdbcTypeMapping extends TypeMapping<Object> {
     public final static JdbcTypeMapping INSTANCE = new JdbcTypeMapping();
 
 
-    private JdbcTypeMapping() {
+    public JdbcTypeMapping() {
         // empty on purpose
     }
 
@@ -281,6 +281,9 @@ public class JdbcTypeMapping extends TypeMapping<Object> {
 
     @Override
     public BigDecimal toBigInt( Object obj ) {
+        if ( obj instanceof Integer ) {
+            return new BigDecimal( (Integer) obj );
+        }
         return BigDecimal.valueOf( (Long) obj );
     }
 
@@ -294,11 +297,6 @@ public class JdbcTypeMapping extends TypeMapping<Object> {
     @Override
     public BigDecimal toInteger( Object obj ) {
         return new BigDecimal( (Integer) obj );
-    }
-
-
-    public BigDecimal toInteger( long obj ) {
-        return new BigDecimal( obj );
     }
 
 

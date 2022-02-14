@@ -29,7 +29,6 @@ import org.apache.calcite.linq4j.tree.Blocks;
 import org.apache.calcite.linq4j.tree.Expression;
 import org.apache.calcite.linq4j.tree.Expressions;
 import org.apache.calcite.linq4j.tree.MemberDeclaration;
-import org.apache.calcite.linq4j.tree.NewExpression;
 import org.apache.calcite.linq4j.tree.ParameterExpression;
 import org.apache.calcite.linq4j.tree.Types;
 import org.polypheny.db.adapter.enumerable.RexToLixTranslator.InputGetterImpl;
@@ -58,8 +57,16 @@ public interface EnumerableAdapterAlg extends EnumerableAlg {
 
         Expression childExp = builder.append( builder.newName( "child_" + System.nanoTime() ), res.block );
 
-        final PhysType physType = new PhysTypeImpl( implementor.getTypeFactory(), rowType, Object[].class, pref.prefer( res.format ), mapping );
-        Type inputJavaType = res.physType.getJavaRowType();
+        // we have to generalize the result into objects to correctly use the defined mapping methods
+        Class<?> javaClass = null;
+        if ( rowType.getFieldCount() == 1 ) {
+            javaClass = Object.class;
+        } else {
+            javaClass = Object[].class;
+        }
+
+        final PhysType physType = new PhysTypeImpl( implementor.getTypeFactory(), rowType, javaClass, pref.prefer( res.format ), mapping );
+        Type inputJavaType = physType.getJavaRowType();
         ParameterExpression inputEnumerator = Expressions.parameter( Types.of( Enumerator.class, inputJavaType ), "inputEnumerator" );
 
         Type outputJavaType = physType.getJavaRowType();
@@ -71,8 +78,10 @@ public interface EnumerableAdapterAlg extends EnumerableAlg {
 
         final BlockBuilder builder2 = new BlockBuilder();
 
-        NewExpression mappingExpr = Expressions.new_( mapping.getClass() );
-        builder2.add( mappingExpr );
+        ParameterExpression mapping_ = Expressions.parameter( TypeMapping.class, builder2.newName( "mapping_" + System.nanoTime() ) );
+        builder2.add(
+                Expressions.declare(
+                        Modifier.FINAL, mapping_, Expressions.new_( mapping.getClass() ) ) );
 
         // transform the rows with the substituted entries back to the needed format
         List<Expression> expressions = new ArrayList<>();
@@ -86,7 +95,8 @@ public interface EnumerableAdapterAlg extends EnumerableAlg {
             } else {
                 method = TypeMapping.getToMethodName( field.getType().getPolyType() );
             }
-            exp = Expressions.call( mappingExpr, method, exp );
+            exp = Expressions.convert_( exp, Object.class );
+            exp = Expressions.call( mapping_, method, exp );
 
             expressions.add( exp );
         }

@@ -174,7 +174,7 @@ public class ExternalTypeMapping extends TypeMapping<Object> {
 
     @Override
     public Object fromTimestamp( TimestampString obj ) {
-        return obj.toString();
+        return obj.getMillisSinceEpoch();
     }
 
 
@@ -186,7 +186,7 @@ public class ExternalTypeMapping extends TypeMapping<Object> {
 
     @Override
     public Object fromTime( TimeString obj ) {
-        return obj.toString();
+        return obj.getMillisOfDay();
     }
 
 
@@ -198,7 +198,7 @@ public class ExternalTypeMapping extends TypeMapping<Object> {
 
     @Override
     public Object fromDate( DateString obj ) {
-        return obj.toString();
+        return obj.getMillisSinceEpoch();
     }
 
 
