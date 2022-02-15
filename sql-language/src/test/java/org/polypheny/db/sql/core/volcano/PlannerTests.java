@@ -36,6 +36,7 @@ import org.polypheny.db.plan.Convention;
 import org.polypheny.db.plan.volcano.VolcanoPlanner;
 import org.polypheny.db.rex.RexBuilder;
 import org.polypheny.db.type.PolyTypeFactoryImpl;
+import org.polypheny.db.type.mapping.PolyphenyTypeDefinition;
 
 
 /**
@@ -50,7 +51,7 @@ class PlannerTests {
     /**
      * Private calling convention representing a physical implementation.
      */
-    static final Convention PHYS_CALLING_CONVENTION = new Convention.Impl( "PHYS", AlgNode.class ) {
+    static final Convention PHYS_CALLING_CONVENTION = new Convention.Impl( "PHYS", AlgNode.class, PolyphenyTypeDefinition.INSTANCE ) {
         @Override
         public boolean canConvertConvention( Convention toConvention ) {
             return true;

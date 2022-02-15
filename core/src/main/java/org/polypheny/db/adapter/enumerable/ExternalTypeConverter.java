@@ -22,7 +22,7 @@ import org.polypheny.db.adapter.enumerable.EnumerableConvention.ExternalConventi
 import org.polypheny.db.algebra.AlgNode;
 import org.polypheny.db.plan.AlgOptCluster;
 import org.polypheny.db.plan.AlgTraitSet;
-import org.polypheny.db.type.ExternalTypeMapping;
+import org.polypheny.db.type.mapping.ExternalTypeDefinition;
 
 public class ExternalTypeConverter extends TypeConverter implements EnumerableAlg {
 
@@ -42,7 +42,7 @@ public class ExternalTypeConverter extends TypeConverter implements EnumerableAl
         final BlockBuilder builder = new BlockBuilder();
         Result orig = implementor.visitChild( this, 0, (EnumerableAlg) input, pref );
 
-        return EnumerableAdapterAlg.getMappingResult( implementor, pref, builder, orig, getRowType(), ExternalTypeMapping.INSTANCE );
+        return EnumerableAdapterAlg.getMappingResult( implementor, pref, builder, orig, getRowType(), getConvention().getTypeDefinition(), ExternalTypeDefinition.INSTANCE );
     }
 
 

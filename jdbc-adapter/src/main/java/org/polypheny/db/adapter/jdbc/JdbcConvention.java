@@ -74,7 +74,7 @@ public class JdbcConvention extends Convention.Impl {
 
 
     public JdbcConvention( SqlDialect dialect, Expression expression, String name ) {
-        super( "JDBC." + name, JdbcAlg.class );
+        super( "JDBC." + name, JdbcAlg.class, JdbcTypeDefinition.INSTANCE );
         this.dialect = dialect;
         this.expression = expression;
     }

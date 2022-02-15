@@ -17,9 +17,6 @@
 package org.polypheny.db.sql.sql.fun;
 
 
-import com.google.gson.Gson;
-import java.lang.reflect.Type;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import org.polypheny.db.algebra.constant.Kind;
@@ -35,16 +32,15 @@ import org.polypheny.db.sql.sql.SqlLiteral;
 import org.polypheny.db.sql.sql.SqlNode;
 import org.polypheny.db.sql.sql.SqlWriter;
 import org.polypheny.db.type.ArrayType;
-import org.polypheny.db.type.PolyType;
 import org.polypheny.db.type.PolyTypeUtil;
+import org.polypheny.db.util.PolyCollections.PolyList;
+import org.polypheny.db.util.PolySerializer;
 
 
 /**
  * Definition of the SQL:2003 standard ARRAY constructor, <code>ARRAY[&lt;expr&gt;, ...]</code>.
  */
 public class SqlArrayValueConstructor extends SqlMultisetValueConstructor implements ArrayValueConstructor {
-
-    private static final Gson gson = new Gson();
 
     public final int dimension;
     public final int maxCardinality;
@@ -95,19 +91,19 @@ public class SqlArrayValueConstructor extends SqlMultisetValueConstructor implem
     @Override
     public void unparse( SqlWriter writer, SqlCall call, int leftPrec, int rightPrec ) {
         if ( !writer.getDialect().supportsNestedArrays() ) {
-            List<Object> list = createListForArrays( call.getSqlOperandList() );
-            writer.literal( "'" + gson.toJson( list ) + "'" );
+            PolyList<Comparable<?>> list = createListForArrays( call.getSqlOperandList() );
+            writer.literal( "'" + PolySerializer.serializeArray( list ) + "'" );
         } else {
             super.unparse( writer, call, leftPrec, rightPrec );
         }
     }
 
 
-    private List<Object> createListForArrays( List<SqlNode> operands ) {
-        List<Object> list = new ArrayList<>( operands.size() );
+    private PolyList<Comparable<?>> createListForArrays( List<SqlNode> operands ) {
+        PolyList<Comparable<?>> list = new PolyList<>( operands.size() );
         for ( SqlNode node : operands ) {
             if ( node instanceof SqlLiteral ) {
-                Object value;
+                Comparable<?> value;
                 switch ( ((SqlLiteral) node).getTypeName() ) {
                     case CHAR:
                     case VARCHAR:
@@ -120,7 +116,7 @@ public class SqlArrayValueConstructor extends SqlMultisetValueConstructor implem
                         value = ((SqlLiteral) node).bigDecimalValue();
                         break;
                     default:
-                        value = ((SqlLiteral) node).getValue();
+                        value = (Comparable<?>) ((SqlLiteral) node).getValue();
                 }
                 list.add( value );
             } else if ( node instanceof SqlCall ) {
@@ -138,13 +134,5 @@ public class SqlArrayValueConstructor extends SqlMultisetValueConstructor implem
         return Objects.hash( kind, "ARRAY" );
     }
 
-
-    public static Object reparse( PolyType innerType, Long dimension, String stringValue ) {
-        Type conversionType = PolyTypeUtil.createNestedListType( dimension, innerType );
-        if ( stringValue == null ) {
-            return null;
-        }
-        return gson.fromJson( stringValue.trim(), conversionType );
-    }
 
 }

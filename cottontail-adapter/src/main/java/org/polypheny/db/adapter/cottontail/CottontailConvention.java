@@ -25,6 +25,7 @@ import org.polypheny.db.adapter.cottontail.rules.CottontailRules;
 import org.polypheny.db.plan.AlgOptPlanner;
 import org.polypheny.db.plan.AlgOptRule;
 import org.polypheny.db.plan.Convention;
+import org.polypheny.db.type.mapping.PolyphenyTypeDefinition;
 
 
 public class CottontailConvention extends Convention.Impl {
@@ -40,7 +41,7 @@ public class CottontailConvention extends Convention.Impl {
 
 
     public CottontailConvention( String name, Expression expression ) {
-        super( "COTTONTAIL." + name, CottontailAlg.class );
+        super( "COTTONTAIL." + name, CottontailAlg.class, PolyphenyTypeDefinition.INSTANCE );
         this.expression = expression;
     }
 

@@ -84,7 +84,6 @@ import org.polypheny.db.transaction.Transaction.MultimediaFlavor;
 import org.polypheny.db.type.ArrayType;
 import org.polypheny.db.type.PolyType;
 import org.polypheny.db.type.PolyTypeFamily;
-import org.polypheny.db.type.TypeMapping;
 import org.polypheny.db.util.BuiltInMethod;
 
 
@@ -252,12 +251,6 @@ public class JdbcToEnumerableConverter extends ConverterImpl implements Enumerab
                                 DataContext.ROOT ) ) );
         builder0.add( Expressions.return_( null, enumerable ) );
         return implementor.result( physType, builder0.toBlock() );
-    }
-
-
-    @Override
-    public TypeMapping<?> getMapping() {
-        return JdbcTypeMapping.INSTANCE;
     }
 
 

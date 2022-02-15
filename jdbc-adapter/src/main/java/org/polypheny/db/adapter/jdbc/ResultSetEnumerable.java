@@ -46,7 +46,6 @@ import java.sql.Statement;
 import java.sql.Types;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
@@ -59,9 +58,9 @@ import org.apache.calcite.linq4j.function.Function0;
 import org.apache.calcite.linq4j.function.Function1;
 import org.apache.calcite.linq4j.tree.Primitive;
 import org.polypheny.db.adapter.DataContext;
+import org.polypheny.db.adapter.jdbc.JdbcTypeDefinition.PolyphenyToJdbcMapping;
 import org.polypheny.db.adapter.jdbc.connection.ConnectionHandler;
 import org.polypheny.db.algebra.type.AlgDataType;
-import org.polypheny.db.sql.sql.SqlDialect;
 import org.polypheny.db.sql.sql.SqlDialect.IntervalParameterStrategy;
 import org.polypheny.db.type.PolyType;
 import org.polypheny.db.util.PolySerializer;
@@ -75,8 +74,6 @@ import org.polypheny.db.util.Static;
  */
 @Slf4j
 public class ResultSetEnumerable<T> extends AbstractEnumerable<T> {
-
-    private final static Map<SqlDialect, JdbcTypeMapping> mappings = new HashMap<>();
 
     private final ConnectionHandler connectionHandler;
     private final String sql;
@@ -220,9 +217,6 @@ public class ResultSetEnumerable<T> extends AbstractEnumerable<T> {
      */
     public static PreparedStatementEnricher createEnricher( Integer[] indexes, DataContext context ) {
         return ( preparedStatement, connectionHandler ) -> {
-            if ( !mappings.containsKey( connectionHandler.getDialect() ) ) {
-                mappings.put( connectionHandler.getDialect(), JdbcTypeMapping.INSTANCE );
-            }
 
             boolean batch = false;
             if ( context.getParameterValues().size() > 1 ) {
@@ -237,8 +231,7 @@ public class ResultSetEnumerable<T> extends AbstractEnumerable<T> {
                             values.get( index ),
                             context.getParameterType( index ),
                             preparedStatement.getParameterMetaData().getParameterType( i + 1 ),
-                            connectionHandler,
-                            mappings.get( connectionHandler.getDialect() ) );
+                            connectionHandler );
                 }
                 if ( batch ) {
                     preparedStatement.addBatch();
@@ -253,18 +246,18 @@ public class ResultSetEnumerable<T> extends AbstractEnumerable<T> {
      * Assigns a value to a dynamic parameter in a prepared statement, calling the appropriate {@code setXxx}
      * method based on the type of the parameter.
      */
-    private static void setDynamicParam( PreparedStatement preparedStatement, int i, Object value, AlgDataType type, int sqlType, ConnectionHandler connectionHandler, JdbcTypeMapping jdbcTypeMapping ) throws SQLException {
+    private static void setDynamicParam( PreparedStatement preparedStatement, int i, Object value, AlgDataType type, int sqlType, ConnectionHandler connectionHandler ) throws SQLException {
         if ( value == null ) {
             preparedStatement.setNull( i, SqlType.NULL.id );
         } else {
-            Object mapped = jdbcTypeMapping.mapInto( value, type );
+            Object mapped = PolyphenyToJdbcMapping.INSTANCE.map( value, type );
 
             switch ( type.getPolyType() ) {
                 case NULL:
                     preparedStatement.setNull( i, SqlType.NULL.id );
                     break;
                 case BOOLEAN:
-                    preparedStatement.setBoolean( i, (Boolean) mapped );
+                    preparedStatement.setBoolean( i, PolyphenyToJdbcMapping.INSTANCE.toBoolean( value ) );
                     break;
                 case TINYINT:
                 case SMALLINT:
@@ -341,7 +334,7 @@ public class ResultSetEnumerable<T> extends AbstractEnumerable<T> {
                         Array array = connectionHandler.createArrayOf( connectionHandler.getDialect().getArrayComponentTypeString( componentType ), ((List<?>) mapped).toArray() );
                         preparedStatement.setArray( i, array );
                     } else {
-                        preparedStatement.setString( i, PolySerializer.parseArray( mapped ) );
+                        preparedStatement.setString( i, PolySerializer.serializeArray( mapped ) );
                     }
                     break;
                 case FILE:

@@ -25,8 +25,8 @@ import org.polypheny.db.adapter.cottontail.algebra.CottontailToEnumerableConvert
 import org.polypheny.db.adapter.cottontail.util.Linq4JFixer;
 import org.polypheny.db.algebra.type.AlgDataType;
 import org.polypheny.db.algebra.type.AlgDataTypeField;
-import org.polypheny.db.sql.sql.fun.SqlArrayValueConstructor;
 import org.polypheny.db.type.ArrayType;
+import org.polypheny.db.util.PolySerializer;
 import org.vitrivr.cottontail.client.iterators.Tuple;
 import org.vitrivr.cottontail.client.iterators.TupleIterator;
 
@@ -184,7 +184,7 @@ public class CottontailQueryEnumerable extends AbstractEnumerable<Object> {
                                 throw new RuntimeException( "Impossible to reach statement." );
                         }
                     } else {
-                        SqlArrayValueConstructor.reparse( arrayType.getComponentType().getPolyType(), arrayType.getDimension(), (String) data );
+                        return PolySerializer.deserializeArray( arrayType.getComponentType().getPolyType(), arrayType.getDimension(), (String) data );
                     }
             }
             throw new AssertionError( "Not yet supported type: " + type.getPolyType() );

@@ -24,6 +24,7 @@ import org.polypheny.db.adapter.file.algebra.FileRules;
 import org.polypheny.db.plan.AlgOptPlanner;
 import org.polypheny.db.plan.AlgOptRule;
 import org.polypheny.db.plan.Convention;
+import org.polypheny.db.type.mapping.PolyphenyTypeDefinition;
 
 
 public class FileConvention extends Convention.Impl {
@@ -42,7 +43,7 @@ public class FileConvention extends Convention.Impl {
 
 
     public FileConvention( String name, Expression fileSchemaExpression, FileSchema fileSchema ) {
-        super( "FileConvention." + name, FileAlg.class );
+        super( "FileConvention." + name, FileAlg.class, PolyphenyTypeDefinition.INSTANCE );
         this.fileSchemaExpression = fileSchemaExpression;
         this.fileSchema = fileSchema;
     }

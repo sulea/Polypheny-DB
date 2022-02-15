@@ -34,12 +34,16 @@
 package org.polypheny.db.adapter.enumerable;
 
 
+import lombok.Getter;
 import org.polypheny.db.plan.AlgOptPlanner;
 import org.polypheny.db.plan.AlgTrait;
 import org.polypheny.db.plan.AlgTraitDef;
 import org.polypheny.db.plan.AlgTraitSet;
 import org.polypheny.db.plan.Convention;
 import org.polypheny.db.plan.ConventionTraitDef;
+import org.polypheny.db.type.mapping.ExternalTypeDefinition;
+import org.polypheny.db.type.mapping.PolyphenyTypeDefinition;
+import org.polypheny.db.type.mapping.TypeDefinition;
 
 
 /**
@@ -47,6 +51,9 @@ import org.polypheny.db.plan.ConventionTraitDef;
  */
 public enum EnumerableConvention implements Convention {
     INSTANCE;
+
+    @Getter
+    private final TypeDefinition<PolyphenyTypeDefinition> typeDefinition = PolyphenyTypeDefinition.INSTANCE;
 
     /**
      * Cost of an enumerable node versus implementing an equivalent node in a "typical" calling convention.
@@ -134,6 +141,12 @@ public enum EnumerableConvention implements Convention {
         @Override
         public String getName() {
             return "EXTERNAL";
+        }
+
+
+        @Override
+        public TypeDefinition getTypeDefinition() {
+            return ExternalTypeDefinition.INSTANCE;
         }
 
 

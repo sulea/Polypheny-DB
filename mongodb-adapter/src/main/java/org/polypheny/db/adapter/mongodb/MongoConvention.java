@@ -30,7 +30,7 @@ public class MongoConvention extends Convention.Impl {
 
 
     public MongoConvention() {
-        super( "MONGO", MongoAlg.class );
+        super( "MONGO", MongoAlg.class, MongoTypeDefinition.INSTANCE );
     }
 
 

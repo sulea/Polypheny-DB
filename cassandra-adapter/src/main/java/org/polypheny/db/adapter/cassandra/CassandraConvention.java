@@ -23,6 +23,7 @@ import org.polypheny.db.adapter.cassandra.rules.CassandraRules;
 import org.polypheny.db.plan.AlgOptPlanner;
 import org.polypheny.db.plan.AlgOptRule;
 import org.polypheny.db.plan.Convention;
+import org.polypheny.db.type.mapping.PolyphenyTypeDefinition;
 
 
 public class CassandraConvention extends Convention.Impl {
@@ -35,7 +36,7 @@ public class CassandraConvention extends Convention.Impl {
 
 
     public CassandraConvention( String name, Expression expression, CassandraPhysicalNameProvider physicalNameProvider, UserDefinedType arrayContainerUdt ) {
-        super( "CASSANDRA." + name, CassandraAlg.class );
+        super( "CASSANDRA." + name, CassandraAlg.class, PolyphenyTypeDefinition.INSTANCE );
         this.expression = expression;
         this.physicalNameProvider = physicalNameProvider;
         this.arrayContainerUdt = arrayContainerUdt;

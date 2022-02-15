@@ -83,6 +83,7 @@ import org.polypheny.db.tools.Frameworks;
 import org.polypheny.db.tools.RuleSet;
 import org.polypheny.db.tools.RuleSets;
 import org.polypheny.db.type.PolyType;
+import org.polypheny.db.type.mapping.PolyphenyTypeDefinition;
 import org.polypheny.db.util.ImmutableBitSet;
 
 
@@ -92,7 +93,7 @@ import org.polypheny.db.util.ImmutableBitSet;
 @Ignore // TODO MV fix
 public class TraitPropagationTest {
 
-    static final Convention PHYSICAL = new Convention.Impl( "PHYSICAL", Phys.class );
+    static final Convention PHYSICAL = new Convention.Impl( "PHYSICAL", Phys.class, PolyphenyTypeDefinition.INSTANCE );
     static final AlgCollation COLLATION = AlgCollations.of( new AlgFieldCollation( 0, AlgFieldCollation.Direction.ASCENDING, AlgFieldCollation.NullDirection.FIRST ) );
 
     static final RuleSet RULES = RuleSets.ofList( PhysAggRule.INSTANCE, PhysProjRule.INSTANCE, PhysTableRule.INSTANCE, PhysSortRule.INSTANCE, SortRemoveRule.INSTANCE, ExpandConversionRule.INSTANCE );

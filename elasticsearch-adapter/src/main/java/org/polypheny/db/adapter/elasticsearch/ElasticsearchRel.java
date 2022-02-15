@@ -58,7 +58,7 @@ public interface ElasticsearchRel extends AlgNode {
     /**
      * Calling convention for relational operations that occur in Elasticsearch.
      */
-    Convention CONVENTION = new Convention.Impl( "ELASTICSEARCH", ElasticsearchRel.class );
+    Convention CONVENTION = new Convention.Impl( "ELASTICSEARCH", ElasticsearchRel.class, null );
 
 
     /**

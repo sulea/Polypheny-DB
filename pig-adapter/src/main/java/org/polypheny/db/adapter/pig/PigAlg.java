@@ -38,6 +38,7 @@ import java.util.ArrayList;
 import java.util.List;
 import org.polypheny.db.algebra.AlgNode;
 import org.polypheny.db.plan.Convention;
+import org.polypheny.db.type.mapping.PolyphenyTypeDefinition;
 
 
 /**
@@ -57,7 +58,7 @@ public interface PigAlg extends AlgNode {
     /**
      * Calling convention for relational operations that occur in Pig.
      */
-    Convention CONVENTION = new Convention.Impl( "PIG", PigAlg.class );
+    Convention CONVENTION = new Convention.Impl( "PIG", PigAlg.class, PolyphenyTypeDefinition.INSTANCE );
 
 
     /**

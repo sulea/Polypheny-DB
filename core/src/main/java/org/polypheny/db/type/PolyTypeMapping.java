@@ -83,7 +83,7 @@ public class PolyTypeMapping {
             case REAL:
             case DOUBLE:
                 // BigDecimal
-                converted = handleNumber( value );
+                converted = handleExactNumber( handleNumber( value ), type );
                 break;
             case DATE:
                 // DateString
@@ -164,6 +164,25 @@ public class PolyTypeMapping {
         }
 
         throw new RuntimeException( String.format( "It was not possible to correctly handle the type: %s with value: %s", type, value ) );
+    }
+
+
+    private static Comparable<?> handleExactNumber( BigDecimal value, AlgDataType type ) {
+        if ( value == null ) {
+            return null;
+        }
+        switch ( type.getPolyType() ) {
+            case TINYINT:
+                return value.byteValue();
+            case SMALLINT:
+                return value.shortValue();
+            case INTEGER:
+                return value.intValue();
+            case BIGINT:
+                return value.longValue();
+        }
+        return value;
+
     }
 
 

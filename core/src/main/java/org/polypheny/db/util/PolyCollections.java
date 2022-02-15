@@ -28,6 +28,11 @@ public class PolyCollections {
     public static class PolyList<T extends Comparable<?>> extends ArrayList<T> implements Comparable<PolyList<T>>, Collection<T> {
 
 
+        public PolyList( int size ) {
+            super( size );
+        }
+
+
         public PolyList( Collection<T> list ) {
             super( list );
         }

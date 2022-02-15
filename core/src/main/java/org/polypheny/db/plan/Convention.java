@@ -35,7 +35,10 @@ package org.polypheny.db.plan;
 
 
 import java.io.Serializable;
+import lombok.Getter;
 import org.polypheny.db.algebra.AlgNode;
+import org.polypheny.db.type.mapping.PolyphenyTypeDefinition;
+import org.polypheny.db.type.mapping.TypeDefinition;
 
 
 /**
@@ -50,11 +53,13 @@ public interface Convention extends AlgTrait, Serializable {
      *
      * Such expressions always have infinite cost.
      */
-    Convention NONE = new Impl( "NONE", AlgNode.class );
+    Convention NONE = new Impl( "NONE", AlgNode.class, PolyphenyTypeDefinition.INSTANCE );
 
     Class getInterface();
 
     String getName();
+
+    TypeDefinition<?> getTypeDefinition();
 
     /**
      * Returns whether we should convert from this convention to {@code toConvention}. Used by {@link ConventionTraitDef}.
@@ -82,12 +87,15 @@ public interface Convention extends AlgTrait, Serializable {
     class Impl implements Convention {
 
         private final String name;
+        @Getter
+        private final TypeDefinition<?> typeDefinition;
         private final transient Class<? extends AlgNode> algClass;
 
 
-        public Impl( String name, Class<? extends AlgNode> algClass ) {
+        public Impl( String name, Class<? extends AlgNode> algClass, TypeDefinition<?> definition ) {
             this.name = name;
             this.algClass = algClass;
+            typeDefinition = definition;
         }
 
 

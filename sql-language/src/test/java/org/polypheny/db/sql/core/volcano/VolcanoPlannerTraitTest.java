@@ -49,6 +49,7 @@ import org.polypheny.db.plan.AlgTraitSet;
 import org.polypheny.db.plan.Convention;
 import org.polypheny.db.plan.ConventionTraitDef;
 import org.polypheny.db.plan.volcano.VolcanoPlanner;
+import org.polypheny.db.type.mapping.PolyphenyTypeDefinition;
 import org.polypheny.db.util.Pair;
 
 
@@ -60,7 +61,7 @@ public class VolcanoPlannerTraitTest {
     /**
      * Private calling convention representing a generic "physical" calling convention.
      */
-    private static final Convention PHYS_CALLING_CONVENTION = new Convention.Impl( "PHYS", AlgNode.class );
+    private static final Convention PHYS_CALLING_CONVENTION = new Convention.Impl( "PHYS", AlgNode.class, PolyphenyTypeDefinition.INSTANCE );
 
     /**
      * Private trait definition for an alternate type of traits.

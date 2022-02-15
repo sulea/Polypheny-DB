@@ -33,7 +33,12 @@ public class PolySerializer {
             .create();
 
 
-    public static Object reparse( PolyType innerType, Long dimension, String stringValue ) {
+    public static String serializeArray( Object obj ) {
+        return gson.toJson( obj );
+    }
+
+
+    public static Object deserializeArray( PolyType innerType, Long dimension, String stringValue ) {
         Type conversionType = PolyTypeUtil.createNestedListType( dimension, innerType );
         if ( stringValue == null ) {
             return null;
@@ -42,17 +47,12 @@ public class PolySerializer {
     }
 
 
-    public static String parseArray( Object obj ) {
-        return gson.toJson( obj );
-    }
-
-
-    public static String parseMap( PolyMap<?, ?> map ) {
+    public static String serializeMap( PolyMap<?, ?> map ) {
         return gson.toJson( map );
     }
 
 
-    public static PolyMap<?, ?> unparseMap( String obj ) {
+    public static PolyMap<?, ?> deserializeMap( String obj ) {
         return gson.fromJson( obj, PolyMap.class );
     }
 

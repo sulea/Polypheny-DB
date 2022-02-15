@@ -28,14 +28,17 @@ import org.apache.calcite.linq4j.tree.BlockStatement;
 import org.apache.calcite.linq4j.tree.Blocks;
 import org.apache.calcite.linq4j.tree.Expression;
 import org.apache.calcite.linq4j.tree.Expressions;
+import org.apache.calcite.linq4j.tree.FieldDeclaration;
 import org.apache.calcite.linq4j.tree.MemberDeclaration;
 import org.apache.calcite.linq4j.tree.ParameterExpression;
 import org.apache.calcite.linq4j.tree.Types;
 import org.polypheny.db.adapter.enumerable.RexToLixTranslator.InputGetterImpl;
 import org.polypheny.db.algebra.type.AlgDataType;
 import org.polypheny.db.algebra.type.AlgDataTypeField;
-import org.polypheny.db.type.ExternalTypeMapping;
-import org.polypheny.db.type.TypeMapping;
+import org.polypheny.db.type.mapping.ExternalTypeDefinition;
+import org.polypheny.db.type.mapping.PolyphenyTypeDefinition;
+import org.polypheny.db.type.mapping.TypeDefinition;
+import org.polypheny.db.type.mapping.TypeSpaceMapping;
 import org.polypheny.db.util.BuiltInMethod;
 import org.polypheny.db.util.Pair;
 
@@ -45,14 +48,24 @@ public interface EnumerableAdapterAlg extends EnumerableAlg {
         final BlockBuilder builder = new BlockBuilder( false );
         Result res = implementInternal( implementor, pref );
 
-        return getMappingResult( implementor, pref, builder, res, getRowType(), getMapping() );
+        return getMappingResult( implementor, pref, builder, res, getRowType(), getConvention().getTypeDefinition(), ExternalTypeDefinition.INSTANCE );
     }
 
-    static Result getMappingResult( EnumerableAlgImplementor implementor, Prefer pref, BlockBuilder builder, Result res, AlgDataType rowType, TypeMapping<?> mapping ) {
-        boolean needsMapping = true;
+    static Result getMappingResult( EnumerableAlgImplementor implementor, Prefer pref, BlockBuilder builder, Result res, AlgDataType rowType, TypeDefinition<?> sourceDefinition, TypeDefinition<?> targetDefinition ) {
+        // if the classes are assignable we don't need to cast
+        boolean needsMapping = rowType
+                .getFieldList().stream().anyMatch( f -> !targetDefinition.getMappingClass( f ).isAssignableFrom( sourceDefinition.getMappingClass( f ) ) );
 
-        if ( !needsMapping || mapping == null ) {
+        if ( !needsMapping ) {
             return res;
+        }
+
+        TypeSpaceMapping<?, ?> mapping;
+        if ( targetDefinition == PolyphenyTypeDefinition.INSTANCE ) {
+            // from adapter to Polypheny TypeSpace
+            mapping = sourceDefinition.getToPolyphenyMapping();
+        } else {
+            mapping = targetDefinition.getFromPolyphenyMapping();
         }
 
         Expression childExp = builder.append( builder.newName( "child_" + System.nanoTime() ), res.block );
@@ -65,7 +78,7 @@ public interface EnumerableAdapterAlg extends EnumerableAlg {
             javaClass = Object[].class;
         }
 
-        final PhysType physType = new PhysTypeImpl( implementor.getTypeFactory(), rowType, javaClass, pref.prefer( res.format ), mapping );
+        final PhysType physType = new PhysTypeImpl( implementor.getTypeFactory(), rowType, javaClass, pref.prefer( res.format ), sourceDefinition );
         Type inputJavaType = physType.getJavaRowType();
         ParameterExpression inputEnumerator = Expressions.parameter( Types.of( Enumerator.class, inputJavaType ), "inputEnumerator" );
 
@@ -78,10 +91,7 @@ public interface EnumerableAdapterAlg extends EnumerableAlg {
 
         final BlockBuilder builder2 = new BlockBuilder();
 
-        ParameterExpression mapping_ = Expressions.parameter( TypeMapping.class, builder2.newName( "mapping_" + System.nanoTime() ) );
-        builder2.add(
-                Expressions.declare(
-                        Modifier.FINAL, mapping_, Expressions.new_( mapping.getClass() ) ) );
+        ParameterExpression mapping_ = Expressions.parameter( TypeSpaceMapping.class, builder2.newName( "mapping_" + System.nanoTime() ) );
 
         // transform the rows with the substituted entries back to the needed format
         List<Expression> expressions = new ArrayList<>();
@@ -89,12 +99,7 @@ public interface EnumerableAdapterAlg extends EnumerableAlg {
 
             Expression exp = getter.field( builder2, field.getIndex(), null );
 
-            String method;
-            if ( mapping instanceof ExternalTypeMapping ) {
-                method = TypeMapping.getFromMethodName( field.getType().getPolyType() );
-            } else {
-                method = TypeMapping.getToMethodName( field.getType().getPolyType() );
-            }
+            String method = TypeSpaceMapping.getMethodName( field.getType().getPolyType() );
             exp = Expressions.convert_( exp, Object.class );
             exp = Expressions.call( mapping_, method, exp );
 
@@ -104,6 +109,8 @@ public interface EnumerableAdapterAlg extends EnumerableAlg {
         builder2.add( Expressions.return_( null, physType.record( expressions ) ) );
         BlockStatement currentBody = builder2.toBlock();
 
+        FieldDeclaration mappingField = Expressions.fieldDecl( Modifier.PUBLIC | Modifier.FINAL, mapping_, Expressions.constant( mapping ) );
+
         Expression body = Expressions.new_(
                 enumeratorType,
                 EnumUtils.NO_EXPRS,
@@ -112,6 +119,7 @@ public interface EnumerableAdapterAlg extends EnumerableAlg {
                                 Modifier.PUBLIC | Modifier.FINAL,
                                 inputEnumerator,
                                 Expressions.call( childExp, BuiltInMethod.ENUMERABLE_ENUMERATOR.method ) ),
+                        mappingField,
                         EnumUtils.overridingMethodDecl(
                                 BuiltInMethod.ENUMERATOR_RESET.method,
                                 EnumUtils.NO_PARAMS,
@@ -151,7 +159,6 @@ public interface EnumerableAdapterAlg extends EnumerableAlg {
     /**
      * Needed to map the types from the internal type convention to the Polypheny type convention
      */
-    TypeMapping<?> getMapping();
 
     AlgDataType getRowType();
 

@@ -41,6 +41,8 @@ import org.polypheny.db.plan.AlgTraitDef;
 import org.polypheny.db.plan.AlgTraitSet;
 import org.polypheny.db.plan.Convention;
 import org.polypheny.db.plan.ConventionTraitDef;
+import org.polypheny.db.type.mapping.PolyphenyTypeDefinition;
+import org.polypheny.db.type.mapping.TypeDefinition;
 
 
 /**
@@ -67,6 +69,12 @@ public enum InterpretableConvention implements Convention {
     @Override
     public String getName() {
         return "INTERPRETABLE";
+    }
+
+
+    @Override
+    public TypeDefinition<?> getTypeDefinition() {
+        return PolyphenyTypeDefinition.INSTANCE;
     }
 
 

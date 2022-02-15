@@ -135,7 +135,7 @@ import org.polypheny.db.type.PolyType;
  * Built-in methods.
  */
 public enum BuiltInMethod {
-    PARSE_ARRAY_FROM_TEXT( PolySerializer.class, "reparse", PolyType.class, Long.class, String.class ),
+    PARSE_ARRAY_FROM_TEXT( PolySerializer.class, "deserializeArray", PolyType.class, Long.class, String.class ),
     QUERYABLE_SELECT( Queryable.class, "select", FunctionExpression.class ),
     QUERYABLE_AS_ENUMERABLE( Queryable.class, "asEnumerable" ),
     QUERYABLE_TABLE_AS_QUERYABLE( QueryableTable.class, "asQueryable", DataContext.class, SchemaPlus.class, String.class ),
