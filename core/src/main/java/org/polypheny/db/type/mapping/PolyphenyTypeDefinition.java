@@ -22,6 +22,7 @@ import org.bson.BsonValue;
 import org.polypheny.db.type.PolyType;
 import org.polypheny.db.type.mapping.TypeSpaceMapping.UnsupportedTypeException;
 import org.polypheny.db.util.DateString;
+import org.polypheny.db.util.NlsString;
 import org.polypheny.db.util.TimeString;
 import org.polypheny.db.util.TimestampString;
 
@@ -47,9 +48,9 @@ public enum PolyphenyTypeDefinition implements TypeDefinition<PolyphenyTypeDefin
             case BOOLEAN:
                 return nullable ? Boolean.class : boolean.class;
             case TINYINT:
-                return nullable ? Byte.class : byte.class;
+                //return nullable ? Byte.class : byte.class;
             case SMALLINT:
-                return nullable ? Short.class : short.class;
+                //return nullable ? Short.class : short.class;
             case INTEGER:
                 return nullable ? Integer.class : int.class;
             case BIGINT:
@@ -85,7 +86,7 @@ public enum PolyphenyTypeDefinition implements TypeDefinition<PolyphenyTypeDefin
                 return nullable ? Long.class : long.class;
             case CHAR:
             case VARCHAR:
-                return String.class;
+                return NlsString.class;
             case BINARY:
             case VARBINARY:
             case FILE:

@@ -106,6 +106,7 @@ import org.polypheny.db.algebra.json.JsonValueEmptyOrErrorBehavior;
 import org.polypheny.db.interpreter.Row;
 import org.polypheny.db.runtime.FlatLists.ComparableList;
 import org.polypheny.db.util.Bug;
+import org.polypheny.db.util.NlsString;
 import org.polypheny.db.util.NumberUtil;
 import org.polypheny.db.util.Static;
 import org.polypheny.db.util.TimeWithTimeZoneString;
@@ -687,6 +688,7 @@ public class Functions {
         if ( b0 == null || b1 == null ) {
             return false;
         }
+        boolean temp = b0.equals( b1 );
         return b0.equals( b1 );
     }
 
@@ -2317,6 +2319,11 @@ public class Functions {
 
     public static int toInt( Number number ) {
         return number.intValue();
+    }
+
+
+    public static int toInt( NlsString s ) {
+        return Integer.parseInt( s.getValue() );
     }
 
 

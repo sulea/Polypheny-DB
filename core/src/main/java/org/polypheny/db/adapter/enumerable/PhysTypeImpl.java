@@ -59,6 +59,7 @@ import org.polypheny.db.algebra.type.AlgDataTypeFactory.Builder;
 import org.polypheny.db.algebra.type.AlgDataTypeField;
 import org.polypheny.db.runtime.Utilities;
 import org.polypheny.db.type.PolyType;
+import org.polypheny.db.type.mapping.PolyphenyTypeDefinition;
 import org.polypheny.db.type.mapping.TypeDefinition;
 import org.polypheny.db.util.BuiltInMethod;
 import org.polypheny.db.util.CoreUtil;
@@ -91,15 +92,15 @@ public class PhysTypeImpl implements PhysType {
         this.rowType = rowType;
         this.javaRowClass = javaRowClass;
         this.format = format;
-        if ( definition != null ) {
-            for ( AlgDataTypeField field : rowType.getFieldList() ) {
-                fieldClasses.add( definition.getMappingClass( field.getType().getPolyType(), field.getType().isNullable() ) );
-            }
-        } else {
-            for ( AlgDataTypeField field : rowType.getFieldList() ) {
-                fieldClasses.add( EnumUtils.javaRowClass( typeFactory, field.getType() ) );
-            }
+        if ( definition == null ) {
+            definition = PolyphenyTypeDefinition.INSTANCE;
         }
+        for ( AlgDataTypeField field : rowType.getFieldList() ) {
+            fieldClasses.add( definition.getMappingClass( field.getType().getPolyType(), field.getType().isNullable() ) );
+        }
+        /*for ( AlgDataTypeField field : rowType.getFieldList() ) {
+            fieldClasses.add( EnumUtils.javaRowClass( typeFactory, field.getType() ) );
+        }*/
 
     }
 

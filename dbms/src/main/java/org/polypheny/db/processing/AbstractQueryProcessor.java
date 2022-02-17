@@ -45,6 +45,7 @@ import org.polypheny.db.adapter.enumerable.EnumerableAlg;
 import org.polypheny.db.adapter.enumerable.EnumerableAlg.Prefer;
 import org.polypheny.db.adapter.enumerable.EnumerableCalc;
 import org.polypheny.db.adapter.enumerable.EnumerableConvention;
+import org.polypheny.db.adapter.enumerable.EnumerableConvention.ExternalConvention;
 import org.polypheny.db.adapter.enumerable.EnumerableInterpretable;
 import org.polypheny.db.adapter.index.Index;
 import org.polypheny.db.adapter.index.IndexManager;
@@ -240,7 +241,7 @@ public abstract class AbstractQueryProcessor implements QueryProcessor, Executio
         boolean lock = !isSubQuery;
         SchemaType schemaType = null;
 
-        final Convention resultConvention = ENABLE_BINDABLE ? BindableConvention.INSTANCE : EnumerableConvention.INSTANCE;
+        final Convention resultConvention = ENABLE_BINDABLE ? BindableConvention.INSTANCE : ExternalConvention.INSTANCE;
         final StopWatch stopWatch = new StopWatch();
         stopWatch.start();
 

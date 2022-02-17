@@ -50,6 +50,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.calcite.avatica.util.ByteString;
 import org.apache.calcite.avatica.util.DateTimeUtils;
 import org.apache.calcite.avatica.util.TimeUnit;
@@ -163,6 +164,7 @@ import org.polypheny.db.util.Util;
  * </tr>
  * </table>
  */
+@Slf4j
 public class RexLiteral extends RexNode {
 
     /**
@@ -194,10 +196,7 @@ public class RexLiteral extends RexNode {
         this.type = Objects.requireNonNull( type );
         this.typeName = Objects.requireNonNull( typeName );
         if ( !valueMatchesType( value, typeName, true ) ) {
-            System.err.println( value );
-            System.err.println( value.getClass().getCanonicalName() );
-            System.err.println( type );
-            System.err.println( typeName );
+            log.warn( String.format( "%s\n%s\n%s\n%s", value, value.getClass().getCanonicalName(), type, typeName ) );
             throw new IllegalArgumentException();
         }
 //        Preconditions.checkArgument( valueMatchesType( value, typeName, true ) );

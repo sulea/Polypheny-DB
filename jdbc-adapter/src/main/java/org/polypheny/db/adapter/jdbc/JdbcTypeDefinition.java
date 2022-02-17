@@ -102,7 +102,7 @@ public enum JdbcTypeDefinition implements TypeDefinition<JdbcTypeDefinition> {
                 return String.class;
             case BINARY:
             case VARBINARY:
-                return byte.class;
+                return Byte[].class;
             case NULL:
             case GEOMETRY:
             case DYNAMIC_STAR:
@@ -167,7 +167,7 @@ public enum JdbcTypeDefinition implements TypeDefinition<JdbcTypeDefinition> {
         @Override
         public PolyList<?> toArray( Object obj, PolyType componentType ) {
             PolyList<Comparable<?>> list = new PolyList<>();
-            ((PolyList<?>) obj).forEach( e -> list.add( (Comparable<?>) map( e, componentType, null, null ) ) );
+            ((List<?>) obj).forEach( e -> list.add( (Comparable<?>) map( e, componentType, null, null ) ) );
             return list;
         }
 
@@ -273,13 +273,17 @@ public enum JdbcTypeDefinition implements TypeDefinition<JdbcTypeDefinition> {
 
         @Override
         public Integer toSmallInt( Object obj ) {
-            return toInteger( obj );
+            return Integer.valueOf( ((Short) obj) );
         }
 
 
         @Override
         public Integer toTinyInt( Object obj ) {
-            return toInteger( obj );
+            if ( obj instanceof Byte ) {
+                return Integer.valueOf( (Byte) obj );
+            } else {
+                return (Integer) obj;
+            }
         }
 
 

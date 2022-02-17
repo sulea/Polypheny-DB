@@ -57,6 +57,7 @@ public enum ExternalTypeDefinition implements TypeDefinition<ExternalTypeDefinit
             case TINYINT:
             case SMALLINT:
             case INTEGER:
+            case DATE:
                 return nullable ? Integer.class : int.class;
             case BIGINT:
             case INTERVAL_YEAR:
@@ -72,12 +73,10 @@ public enum ExternalTypeDefinition implements TypeDefinition<ExternalTypeDefinit
             case INTERVAL_MINUTE:
             case INTERVAL_MINUTE_SECOND:
             case INTERVAL_SECOND:
-
             case TIMESTAMP:
             case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
             case TIME:
             case TIME_WITH_LOCAL_TIME_ZONE:
-            case DATE:
                 return nullable ? Long.class : long.class;
             case DECIMAL:
                 return BigDecimal.class;
@@ -221,8 +220,8 @@ public enum ExternalTypeDefinition implements TypeDefinition<ExternalTypeDefinit
 
 
         @Override
-        public Long toDate( Object obj ) {
-            return ((DateString) obj).getMillisSinceEpoch();
+        public Integer toDate( Object obj ) {
+            return ((DateString) obj).getDaysSinceEpoch();
         }
 
 
@@ -240,7 +239,7 @@ public enum ExternalTypeDefinition implements TypeDefinition<ExternalTypeDefinit
 
         @Override
         public Float toFloat( Object obj ) {
-            return (Float) obj;
+            return ((BigDecimal) obj).floatValue();
         }
 
 
@@ -263,14 +262,14 @@ public enum ExternalTypeDefinition implements TypeDefinition<ExternalTypeDefinit
 
 
         @Override
-        public Integer toSmallInt( Object obj ) {
-            return toInteger( obj );
+        public Byte toSmallInt( Object obj ) {
+            return ((Integer) obj).byteValue();
         }
 
 
         @Override
-        public Integer toTinyInt( Object obj ) {
-            return toInteger( obj );
+        public Short toTinyInt( Object obj ) {
+            return ((Integer) obj).shortValue();
         }
 
 

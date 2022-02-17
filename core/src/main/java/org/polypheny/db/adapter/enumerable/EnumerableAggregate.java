@@ -67,6 +67,7 @@ import org.polypheny.db.plan.AlgTraitSet;
 import org.polypheny.db.prepare.JavaTypeFactoryImpl.SyntheticRecordType;
 import org.polypheny.db.rex.RexInputRef;
 import org.polypheny.db.rex.RexNode;
+import org.polypheny.db.type.mapping.PolyphenyTypeDefinition;
 import org.polypheny.db.util.BuiltInMethod;
 import org.polypheny.db.util.ImmutableBitSet;
 import org.polypheny.db.util.Pair;
@@ -470,7 +471,7 @@ public class EnumerableAggregate extends Aggregate implements EnumerableAlg {
 
         @Override
         public Type returnType() {
-            return EnumUtils.javaClass( typeFactory, returnAlgType() );
+            return PolyphenyTypeDefinition.INSTANCE.getMappingClass( returnAlgType().getPolyType(), true );//EnumUtils.javaClass( typeFactory, returnAlgType() );
         }
 
 

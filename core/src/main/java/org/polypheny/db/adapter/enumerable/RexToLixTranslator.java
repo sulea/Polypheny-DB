@@ -81,9 +81,11 @@ import org.polypheny.db.rex.RexNode;
 import org.polypheny.db.rex.RexProgram;
 import org.polypheny.db.runtime.Functions;
 import org.polypheny.db.type.PolyTypeUtil;
+import org.polypheny.db.type.mapping.PolyphenyTypeDefinition;
 import org.polypheny.db.util.BuiltInMethod;
 import org.polypheny.db.util.Conformance;
 import org.polypheny.db.util.ControlFlowException;
+import org.polypheny.db.util.NlsString;
 import org.polypheny.db.util.Pair;
 import org.polypheny.db.util.Util;
 
@@ -506,7 +508,7 @@ public class RexToLixTranslator {
                 }
         }
         if ( convert == null ) {
-            convert = convert( operand, typeFactory.getJavaClass( targetType ) );
+            convert = convert( operand, PolyphenyTypeDefinition.INSTANCE.getMappingClass( targetType.getPolyType(), targetType.isNullable() ) );
         }
         // Going from anything to CHAR(n) or VARCHAR(n), make sure value is no longer than n.
         boolean pad = false;
@@ -719,7 +721,7 @@ public class RexToLixTranslator {
      */
     private Expression translateParameter( RexDynamicParam expr, RexImpTable.NullAs nullAs, Type storageType ) {
         if ( storageType == null ) {
-            storageType = typeFactory.getJavaClass( expr.getType() );
+            storageType = PolyphenyTypeDefinition.INSTANCE.getMappingClass( expr.getType().getPolyType(), expr.getType().isNullable() );//typeFactory.getJavaClass( expr.getType() );
         }
         return nullAs.handle(
                 convert(
@@ -759,7 +761,7 @@ public class RexToLixTranslator {
                     return RexImpTable.FALSE_EXPR;
             }
         }
-        Type javaClass = typeFactory.getJavaClass( type );
+        Type javaClass = PolyphenyTypeDefinition.INSTANCE.getMappingClass( type.getPolyType(), false );
         final Object value2;
         switch ( literal.getType().getPolyType() ) {
             case DECIMAL:
@@ -797,8 +799,9 @@ public class RexToLixTranslator {
                 break;
             case CHAR:
             case VARCHAR:
-                value2 = literal.getValueAs( String.class );
-                break;
+                //value2 = literal.getValueAs( String.class );
+                return literal.getValueAs( NlsString.class ).getAsExpression();
+            //break;
             case BINARY:
             case VARBINARY:
                 return Expressions.new_(

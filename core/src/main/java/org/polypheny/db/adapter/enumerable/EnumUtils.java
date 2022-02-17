@@ -56,6 +56,7 @@ import org.polypheny.db.algebra.core.JoinAlgType;
 import org.polypheny.db.algebra.type.AlgDataType;
 import org.polypheny.db.algebra.type.AlgDataTypeField;
 import org.polypheny.db.rex.RexNode;
+import org.polypheny.db.type.mapping.PolyphenyTypeDefinition;
 import org.polypheny.db.util.BuiltInMethod;
 import org.polypheny.db.util.Util;
 
@@ -105,7 +106,8 @@ public class EnumUtils {
         return new AbstractList<Type>() {
             @Override
             public Type get( int index ) {
-                return EnumUtils.javaClass( typeFactory, inputTypes.get( index ) );
+                //return EnumUtils.javaClass( typeFactory, inputTypes.get( index ) );
+                return PolyphenyTypeDefinition.INSTANCE.getMappingClass( inputTypes.get( index ).getPolyType(), false );
             }
 
 

@@ -57,13 +57,15 @@ import java.util.Objects;
 import javax.annotation.Nonnull;
 import lombok.Getter;
 import org.apache.calcite.avatica.util.ByteString;
+import org.apache.calcite.linq4j.tree.Expression;
+import org.apache.calcite.linq4j.tree.Expressions;
 import org.polypheny.db.runtime.Functions;
 
 
 /**
  * A string, optionally with {@link Charset character set} and {@link Collation}. It is immutable.
  */
-public class NlsString implements Comparable<NlsString>, Cloneable, Externalizable {
+public class NlsString implements Comparable<NlsString>, Cloneable, Externalizable, Expressionizable {
 
     private static final LoadingCache<Pair<ByteString, Charset>, String>
             DECODE_MAP = CacheBuilder.newBuilder()
@@ -320,6 +322,19 @@ public class NlsString implements Comparable<NlsString>, Cloneable, Externalizab
         charsetName = in.readUTF();
         charset = ((SerializableCharset) in.readObject()).getCharset();
         collation = (Collation) in.readObject();
+    }
+
+
+    @Override
+    public Expression getAsExpression() {
+        return Expressions.new_(
+                NlsString.class,
+                Expressions.constant( getValue() ),
+                Expressions.constant( charsetName ),
+                Expressions.new_(
+                        Collation.class,
+                        Expressions.constant( collation.getCollationName() ),
+                        Expressions.constant( collation.getCoercibility() ) ) );
     }
 
 

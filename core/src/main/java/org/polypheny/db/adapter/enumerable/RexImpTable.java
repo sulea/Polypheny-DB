@@ -105,6 +105,7 @@ import org.polypheny.db.schema.ImplementableFunction;
 import org.polypheny.db.schema.impl.AggregateFunctionImpl;
 import org.polypheny.db.type.PolyType;
 import org.polypheny.db.type.PolyTypeUtil;
+import org.polypheny.db.type.mapping.PolyphenyTypeDefinition;
 import org.polypheny.db.util.BuiltInMethod;
 import org.polypheny.db.util.ImmutableIntList;
 import org.polypheny.db.util.Util;
@@ -1922,7 +1923,7 @@ public class RexImpTable {
                 expression = Expressions.call( translatedOperands.get( 0 ), method, Util.skip( translatedOperands, 1 ) );
             }
 
-            final Type returnType = translator.typeFactory.getJavaClass( call.getType() );
+            final Type returnType = PolyphenyTypeDefinition.INSTANCE.getMappingClass( call.getType().getPolyType(), call.getType().isNullable() );//translator.typeFactory.getJavaClass( call.getType() );
             return Types.castIfNecessary( returnType, expression );
         }
 

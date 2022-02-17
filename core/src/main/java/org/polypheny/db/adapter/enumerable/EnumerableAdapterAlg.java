@@ -30,12 +30,13 @@ import org.apache.calcite.linq4j.tree.Expression;
 import org.apache.calcite.linq4j.tree.Expressions;
 import org.apache.calcite.linq4j.tree.FieldDeclaration;
 import org.apache.calcite.linq4j.tree.MemberDeclaration;
+import org.apache.calcite.linq4j.tree.MethodCallExpression;
 import org.apache.calcite.linq4j.tree.ParameterExpression;
 import org.apache.calcite.linq4j.tree.Types;
 import org.polypheny.db.adapter.enumerable.RexToLixTranslator.InputGetterImpl;
 import org.polypheny.db.algebra.type.AlgDataType;
 import org.polypheny.db.algebra.type.AlgDataTypeField;
-import org.polypheny.db.type.mapping.ExternalTypeDefinition;
+import org.polypheny.db.type.PolyType;
 import org.polypheny.db.type.mapping.PolyphenyTypeDefinition;
 import org.polypheny.db.type.mapping.TypeDefinition;
 import org.polypheny.db.type.mapping.TypeSpaceMapping;
@@ -48,13 +49,14 @@ public interface EnumerableAdapterAlg extends EnumerableAlg {
         final BlockBuilder builder = new BlockBuilder( false );
         Result res = implementInternal( implementor, pref );
 
-        return getMappingResult( implementor, pref, builder, res, getRowType(), getConvention().getTypeDefinition(), ExternalTypeDefinition.INSTANCE );
+        assert getInputs().size() == 1;
+        return getMappingResult( implementor, pref, builder, res, getRowType(), getInput( 0 ).getConvention().getTypeDefinition(), PolyphenyTypeDefinition.INSTANCE );
     }
 
     static Result getMappingResult( EnumerableAlgImplementor implementor, Prefer pref, BlockBuilder builder, Result res, AlgDataType rowType, TypeDefinition<?> sourceDefinition, TypeDefinition<?> targetDefinition ) {
         // if the classes are assignable we don't need to cast
-        boolean needsMapping = rowType
-                .getFieldList().stream().anyMatch( f -> !targetDefinition.getMappingClass( f ).isAssignableFrom( sourceDefinition.getMappingClass( f ) ) );
+        boolean needsMapping = sourceDefinition != targetDefinition && rowType
+                .getFieldList().stream().anyMatch( f -> !targetDefinition.classesMatch( f, sourceDefinition ) );
 
         if ( !needsMapping ) {
             return res;
@@ -87,7 +89,7 @@ public interface EnumerableAdapterAlg extends EnumerableAlg {
 
         Expression input = RexToLixTranslator.convert( Expressions.call( inputEnumerator, BuiltInMethod.ENUMERATOR_CURRENT.method ), inputJavaType );
 
-        InputGetterImpl getter = new InputGetterImpl( Collections.singletonList( Pair.of( input, res.physType ) ) );
+        InputGetterImpl getter = new InputGetterImpl( Collections.singletonList( Pair.of( input, physType ) ) );
 
         final BlockBuilder builder2 = new BlockBuilder();
 
@@ -97,11 +99,12 @@ public interface EnumerableAdapterAlg extends EnumerableAlg {
         List<Expression> expressions = new ArrayList<>();
         for ( AlgDataTypeField field : rowType.getFieldList() ) {
 
-            Expression exp = getter.field( builder2, field.getIndex(), null );
+            Expression exp = getter.field( builder2, field.getIndex(), Object.class );
 
             String method = TypeSpaceMapping.getMethodName( field.getType().getPolyType() );
             exp = Expressions.convert_( exp, Object.class );
-            exp = Expressions.call( mapping_, method, exp );
+
+            exp = getDefaultOrSpecialMappingCall( field, mapping_, exp, method );
 
             expressions.add( exp );
         }
@@ -151,6 +154,24 @@ public interface EnumerableAdapterAlg extends EnumerableAlg {
                                 EnumUtils.NO_EXPRS,
                                 ImmutableList.<MemberDeclaration>of( Expressions.methodDecl( Modifier.PUBLIC, enumeratorType, BuiltInMethod.ENUMERABLE_ENUMERATOR.method.getName(), EnumUtils.NO_PARAMS, Blocks.toFunctionBlock( body ) ) ) ) ) );
         return implementor.result( physType, builder.toBlock() );
+    }
+
+    static MethodCallExpression getDefaultOrSpecialMappingCall( AlgDataTypeField field, ParameterExpression mapping_, Expression exp, String method ) {
+        if ( field.getType().getPolyType() == PolyType.ARRAY ) {
+            return Expressions.call(
+                    mapping_,
+                    method,
+                    exp,
+                    Expressions.constant( field.getType().getComponentType().getPolyType() ) );
+        } else if ( field.getType().getPolyType() == PolyType.MAP ) {
+            return Expressions.call(
+                    mapping_,
+                    method,
+                    exp,
+                    Expressions.constant( field.getType().getKeyType().getPolyType() ),
+                    Expressions.constant( field.getType().getValueType().getPolyType() ) );
+        }
+        return Expressions.call( mapping_, method, exp );
     }
 
 

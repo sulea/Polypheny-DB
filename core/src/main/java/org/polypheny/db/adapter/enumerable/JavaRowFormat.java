@@ -47,6 +47,7 @@ import org.polypheny.db.algebra.type.AlgDataType;
 import org.polypheny.db.interpreter.Row;
 import org.polypheny.db.runtime.FlatLists;
 import org.polypheny.db.runtime.Unit;
+import org.polypheny.db.type.mapping.PolyphenyTypeDefinition;
 import org.polypheny.db.util.BuiltInMethod;
 
 
@@ -97,7 +98,8 @@ public enum JavaRowFormat {
         @Override
         Type javaRowClass( JavaTypeFactory typeFactory, AlgDataType type ) {
             assert type.getFieldCount() == 1;
-            return typeFactory.getJavaClass( type.getFieldList().get( 0 ).getType() );
+            //return typeFactory.getJavaClass( type.getFieldList().get( 0 ).getType() );
+            return PolyphenyTypeDefinition.INSTANCE.getMappingClass( type.getFieldList().get( 0 ).getType().getPolyType(), true );
         }
 
 

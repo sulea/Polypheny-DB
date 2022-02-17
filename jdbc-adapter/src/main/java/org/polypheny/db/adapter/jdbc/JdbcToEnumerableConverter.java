@@ -326,7 +326,7 @@ public class JdbcToEnumerableConverter extends ConverterImpl implements Enumerab
                 }
                 break;
 
-            case DATE:
+            /*case DATE:
             case TIME:
             case TIMESTAMP:
                 source = Expressions.call(
@@ -334,7 +334,7 @@ public class JdbcToEnumerableConverter extends ConverterImpl implements Enumerab
                         Expressions.<Expression>list()
                                 .append( Expressions.call( resultSet_, getMethod2( polyType ), dateTimeArgs ) )
                                 .appendIf( offset, getTimeZoneExpression( implementor ) ) );
-                break;
+                break;*/
             //When it is of type array, fetch with getObject, because it could either be an array or the elementType
                 /*case ARRAY:
                 if( dialect.supportsNestedArrays() ) {
