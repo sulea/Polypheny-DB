@@ -16,6 +16,8 @@
 
 package org.polypheny.db.cql;
 
+import static org.junit.Assert.fail;
+
 import com.google.gson.JsonObject;
 import java.sql.Date;
 import java.time.LocalDate;
@@ -411,6 +413,10 @@ public class CqlInterfaceTest extends CqlTestHelper {
      */
     private static void assertJsonObjects( JSONObject expected, JSONObject actual ) {
         List<String> keys = new ArrayList<>();
+        if ( actual.keySet().contains( "error" ) ) {
+            fail( actual.getString( "error" ) );
+        }
+
         // save order of headers keys
         actual.getJSONArray( "header" ).iterator().forEachRemaining( el -> keys.add( ((JSONObject) el).getString( "name" ) ) );
         JSONArray expectedResults = expected.getJSONArray( "result" );
