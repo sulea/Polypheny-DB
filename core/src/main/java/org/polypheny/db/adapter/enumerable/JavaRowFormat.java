@@ -99,7 +99,7 @@ public enum JavaRowFormat {
         Type javaRowClass( JavaTypeFactory typeFactory, AlgDataType type ) {
             assert type.getFieldCount() == 1;
             //return typeFactory.getJavaClass( type.getFieldList().get( 0 ).getType() );
-            return PolyphenyTypeDefinition.INSTANCE.getMappingClass( type.getFieldList().get( 0 ).getType().getPolyType(), true );
+            return PolyphenyTypeDefinition.INSTANCE.getGeneralizedMappingClass( type.getFieldList().get( 0 ).getType().getPolyType() );
         }
 
 

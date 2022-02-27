@@ -16,9 +16,13 @@
 
 package org.polypheny.db.type.mapping;
 
+import java.nio.charset.StandardCharsets;
+import java.util.List;
 import org.polypheny.db.algebra.type.AlgDataType;
 import org.polypheny.db.algebra.type.AlgDataTypeField;
 import org.polypheny.db.type.PolyType;
+import org.polypheny.db.util.Collation;
+import org.polypheny.db.util.NlsString;
 
 public interface TypeDefinition<T extends TypeDefinition<T>> {
 
@@ -26,29 +30,41 @@ public interface TypeDefinition<T extends TypeDefinition<T>> {
 
     TypeSpaceMapping<PolyphenyTypeDefinition, T> getFromPolyphenyMapping();
 
-    Class<?> getMappingClass( PolyType type, boolean nullable );
+    List<Class<?>> getMappingClasses( PolyType type );
 
-    default Class<?> getMappingClass( AlgDataTypeField field ) {
-        return getMappingClass( field.getType().getPolyType(), field.getType().isNullable() );
+    default List<Class<?>> getMappingClasses( AlgDataTypeField field ) {
+        return getMappingClasses( field.getType().getPolyType() );
     }
 
+    default Class<?> getGeneralizedMappingClass( PolyType type ) {
+        List<Class<?>> classes = getMappingClasses( type );
+        if ( classes.size() > 1 ) {
+            return Object.class;
+        }
+        return classes.get( 0 );
+    }
 
     default boolean needsPolyphenyMapping() {
         return true;
     }
 
     default boolean classesMatch( AlgDataTypeField f, TypeDefinition<?> source ) {
-        Class<?> clazz = getMappingClass( f );
-        Class<?> sourceClazz = source.getMappingClass( f );
+        List<Class<?>> classes = getMappingClasses( f );
+        List<Class<?>> sourceClasses = source.getMappingClasses( f );
 
-        return potentialSubTypesMatch( source, f, this ) && clazz.isAssignableFrom( sourceClazz ) && noSpecialCases( clazz, sourceClazz );
+        return potentialSubTypesMatch( source, f, this )
+                && fullyOverlap( sourceClasses, classes ) && noSpecialCases( classes, sourceClasses );
     }
 
-    static boolean noSpecialCases( Class<?> clazz, Class<?> sourceClazz ) {
+    static boolean fullyOverlap( List<Class<?>> sourceClasses, List<Class<?>> targetClasses ) {
+        return targetClasses.stream().allMatch( c -> sourceClasses.stream().allMatch( c::isAssignableFrom ) );
+    }
+
+    static boolean noSpecialCases( List<Class<?>> classes, List<Class<?>> sourceClasses ) {
         // every value can be assigned to String, but this can lead to errors
         // this happens when one value is string
-        return (clazz != String.class && sourceClazz != String.class) ||
-                (clazz == String.class && sourceClazz == String.class);
+        return (!classes.contains( String.class ) && !sourceClasses.contains( String.class )) ||
+                (classes.contains( String.class ) && sourceClasses.contains( String.class ));
     }
 
     static boolean potentialSubTypesMatch( TypeDefinition<?> source, AlgDataTypeField f, TypeDefinition<?> target ) {
@@ -63,9 +79,11 @@ public interface TypeDefinition<T extends TypeDefinition<T>> {
     }
 
     static boolean subClassesMatch( TypeDefinition<?> source, AlgDataType type, TypeDefinition<?> target ) {
-        return source
-                .getMappingClass( type.getPolyType(), type.isNullable() )
-                .isAssignableFrom( target.getMappingClass( type.getPolyType(), type.isNullable() ) );
+        return fullyOverlap( source.getMappingClasses( type.getPolyType() ), target.getMappingClasses( type.getPolyType() ) );
+    }
+
+    static NlsString getNlsString( String obj ) {
+        return new NlsString( obj, StandardCharsets.ISO_8859_1.name(), Collation.IMPLICIT );
     }
 
 }

@@ -66,6 +66,7 @@ public interface TypeSpaceMapping<F extends TypeDefinition<F>, T extends TypeDef
     }
 
 
+    @SuppressWarnings("unchecked")
     default Object map( Object obj, PolyType type, @Nullable PolyType componentType, @Nullable Pair<PolyType, PolyType> keyValueType ) {
 
         // used to assure that no null values are parsed,

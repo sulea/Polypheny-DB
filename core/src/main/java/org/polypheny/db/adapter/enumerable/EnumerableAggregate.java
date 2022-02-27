@@ -471,7 +471,7 @@ public class EnumerableAggregate extends Aggregate implements EnumerableAlg {
 
         @Override
         public Type returnType() {
-            return PolyphenyTypeDefinition.INSTANCE.getMappingClass( returnAlgType().getPolyType(), true );//EnumUtils.javaClass( typeFactory, returnAlgType() );
+            return PolyphenyTypeDefinition.INSTANCE.getGeneralizedMappingClass( returnAlgType().getPolyType() );//EnumUtils.javaClass( typeFactory, returnAlgType() );
         }
 
 

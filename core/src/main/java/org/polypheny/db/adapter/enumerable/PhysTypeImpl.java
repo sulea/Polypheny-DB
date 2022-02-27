@@ -96,7 +96,7 @@ public class PhysTypeImpl implements PhysType {
             definition = PolyphenyTypeDefinition.INSTANCE;
         }
         for ( AlgDataTypeField field : rowType.getFieldList() ) {
-            fieldClasses.add( definition.getMappingClass( field.getType().getPolyType(), field.getType().isNullable() ) );
+            fieldClasses.add( definition.getGeneralizedMappingClass( field.getType().getPolyType() ) );
         }
         /*for ( AlgDataTypeField field : rowType.getFieldList() ) {
             fieldClasses.add( EnumUtils.javaRowClass( typeFactory, field.getType() ) );

@@ -16,11 +16,14 @@
 
 package org.polypheny.db.adapter.jdbc;
 
+import java.io.InputStream;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.sql.Date;
 import java.sql.Time;
 import java.sql.Timestamp;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import lombok.Getter;
@@ -57,15 +60,15 @@ public enum JdbcTypeDefinition implements TypeDefinition<JdbcTypeDefinition> {
 
 
     @Override
-    public Class<?> getMappingClass( PolyType type, boolean nullable ) {
+    public List<Class<?>> getMappingClasses( PolyType type ) {
         switch ( type ) {
 
             case BOOLEAN:
-                return nullable ? Boolean.class : boolean.class;
+                return Arrays.asList( Boolean.class, boolean.class );
             case TINYINT:
             case SMALLINT:
             case INTEGER:
-                return nullable ? Integer.class : int.class;
+                return Arrays.asList( Integer.class, int.class );
             case BIGINT:
             case INTERVAL_YEAR:
             case INTERVAL_YEAR_MONTH:
@@ -80,29 +83,29 @@ public enum JdbcTypeDefinition implements TypeDefinition<JdbcTypeDefinition> {
             case INTERVAL_MINUTE:
             case INTERVAL_MINUTE_SECOND:
             case INTERVAL_SECOND:
-                return nullable ? Long.class : long.class;
+                return Arrays.asList( Long.class, long.class );
             case DECIMAL:
-                return BigDecimal.class;
+                return Collections.singletonList( BigDecimal.class );
             case FLOAT:
             case REAL:
-                return nullable ? Float.class : float.class;
+                return Arrays.asList( Float.class, float.class );
             case DOUBLE:
-                return nullable ? Double.class : double.class;
+                return Arrays.asList( Double.class, double.class );
             case DATE:
-                return Date.class;
+                return Collections.singletonList( Date.class );
             case TIME_WITH_LOCAL_TIME_ZONE:
             case TIME:
-                return Time.class;
+                return Collections.singletonList( Time.class );
             case TIMESTAMP:
             case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
-                return Timestamp.class;
+                return Collections.singletonList( Timestamp.class );
             case CHAR:
             case VARCHAR:
             case JSON:
-                return String.class;
+                return Collections.singletonList( String.class );
             case BINARY:
             case VARBINARY:
-                return Byte[].class;
+                return Collections.singletonList( Byte[].class );
             case NULL:
             case GEOMETRY:
             case DYNAMIC_STAR:
@@ -112,19 +115,19 @@ public enum JdbcTypeDefinition implements TypeDefinition<JdbcTypeDefinition> {
             case DISTINCT:
             case SYMBOL:
             case ANY:
-                return Object.class;
+                return Collections.singletonList( Object.class );
             case MULTISET:
             case COLUMN_LIST:
             case ROW:
             case ARRAY:
-                return List.class;
+                return Collections.singletonList( List.class );
             case MAP:
-                return Map.class;
+                return Collections.singletonList( Map.class );
             case FILE:
             case SOUND:
             case VIDEO:
             case IMAGE:
-                return Object.class;// (most generic match) Arrays.asList( ByteString.class, InputStream.class );
+                return Arrays.asList( ByteString.class, InputStream.class );
         }
 
         throw new UnsupportedTypeException( "Jdbc", type );
@@ -198,7 +201,7 @@ public enum JdbcTypeDefinition implements TypeDefinition<JdbcTypeDefinition> {
 
         @Override
         public NlsString toVarchar( Object obj ) {
-            return new NlsString( (String) obj, StandardCharsets.ISO_8859_1.name(), Collation.IMPLICIT );
+            return TypeDefinition.getNlsString( (String) obj );
         }
 
 

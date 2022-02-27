@@ -1923,7 +1923,7 @@ public class RexImpTable {
                 expression = Expressions.call( translatedOperands.get( 0 ), method, Util.skip( translatedOperands, 1 ) );
             }
 
-            final Type returnType = PolyphenyTypeDefinition.INSTANCE.getMappingClass( call.getType().getPolyType(), call.getType().isNullable() );//translator.typeFactory.getJavaClass( call.getType() );
+            final Type returnType = PolyphenyTypeDefinition.INSTANCE.getGeneralizedMappingClass( call.getType().getPolyType() );//translator.typeFactory.getJavaClass( call.getType() );
             return Types.castIfNecessary( returnType, expression );
         }
 

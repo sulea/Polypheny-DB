@@ -73,8 +73,8 @@ public interface EnumerableAdapterAlg extends EnumerableAlg {
         Expression childExp = builder.append( builder.newName( "child_" + System.nanoTime() ), res.block );
 
         // we have to generalize the result into objects to correctly use the defined mapping methods
-        Class<?> javaClass = null;
-        if ( rowType.getFieldCount() == 1 ) {
+        Class<?> javaClass;
+        if ( res.format == JavaRowFormat.SCALAR ) {
             javaClass = Object.class;
         } else {
             javaClass = Object[].class;
@@ -89,7 +89,7 @@ public interface EnumerableAdapterAlg extends EnumerableAlg {
 
         Expression input = RexToLixTranslator.convert( Expressions.call( inputEnumerator, BuiltInMethod.ENUMERATOR_CURRENT.method ), inputJavaType );
 
-        InputGetterImpl getter = new InputGetterImpl( Collections.singletonList( Pair.of( input, physType ) ) );
+        InputGetterImpl getter = new InputGetterImpl( Collections.singletonList( Pair.of( input, res.physType ) ) );
 
         final BlockBuilder builder2 = new BlockBuilder();
 
@@ -99,7 +99,7 @@ public interface EnumerableAdapterAlg extends EnumerableAlg {
         List<Expression> expressions = new ArrayList<>();
         for ( AlgDataTypeField field : rowType.getFieldList() ) {
 
-            Expression exp = getter.field( builder2, field.getIndex(), Object.class );
+            Expression exp = getter.field( builder2, field.getIndex(), null );
 
             String method = TypeSpaceMapping.getMethodName( field.getType().getPolyType() );
             exp = Expressions.convert_( exp, Object.class );

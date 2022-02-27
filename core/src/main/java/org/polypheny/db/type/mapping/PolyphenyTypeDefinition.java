@@ -16,13 +16,17 @@
 
 package org.polypheny.db.type.mapping;
 
+import java.io.InputStream;
 import java.math.BigDecimal;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
-import org.bson.BsonValue;
+import org.apache.calcite.avatica.util.ByteString;
 import org.polypheny.db.type.PolyType;
 import org.polypheny.db.type.mapping.TypeSpaceMapping.UnsupportedTypeException;
 import org.polypheny.db.util.DateString;
 import org.polypheny.db.util.NlsString;
+import org.polypheny.db.util.PolyBson;
 import org.polypheny.db.util.TimeString;
 import org.polypheny.db.util.TimestampString;
 
@@ -43,33 +47,33 @@ public enum PolyphenyTypeDefinition implements TypeDefinition<PolyphenyTypeDefin
 
 
     @Override
-    public Class<?> getMappingClass( PolyType type, boolean nullable ) {
+    public List<Class<?>> getMappingClasses( PolyType type ) {
         switch ( type ) {
             case BOOLEAN:
-                return nullable ? Boolean.class : boolean.class;
+                return Arrays.asList( Boolean.class, boolean.class );
             case TINYINT:
                 //return nullable ? Byte.class : byte.class;
             case SMALLINT:
                 //return nullable ? Short.class : short.class;
             case INTEGER:
-                return nullable ? Integer.class : int.class;
+                return Arrays.asList( Integer.class, int.class );
             case BIGINT:
-                return nullable ? Long.class : long.class;
+                return Arrays.asList( Long.class, long.class );
             case DECIMAL:
-                return BigDecimal.class;
+                return Collections.singletonList( BigDecimal.class );
             case FLOAT:
             case REAL:
-                return nullable ? Float.class : float.class;
+                return Arrays.asList( Float.class, float.class );
             case DOUBLE:
-                return nullable ? Double.class : double.class;
+                return Arrays.asList( Double.class, double.class );
             case DATE:
-                return DateString.class;
+                return Collections.singletonList( DateString.class );
             case TIME:
             case TIME_WITH_LOCAL_TIME_ZONE:
-                return TimeString.class;
+                return Collections.singletonList( TimeString.class );
             case TIMESTAMP:
             case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
-                return TimestampString.class;
+                return Collections.singletonList( TimestampString.class );
             case INTERVAL_YEAR:
             case INTERVAL_YEAR_MONTH:
             case INTERVAL_MONTH:
@@ -83,17 +87,17 @@ public enum PolyphenyTypeDefinition implements TypeDefinition<PolyphenyTypeDefin
             case INTERVAL_MINUTE:
             case INTERVAL_MINUTE_SECOND:
             case INTERVAL_SECOND:
-                return nullable ? Long.class : long.class;
+                return Arrays.asList( Long.class, long.class );
             case CHAR:
             case VARCHAR:
-                return NlsString.class;
+                return Collections.singletonList( NlsString.class );
             case BINARY:
             case VARBINARY:
             case FILE:
             case IMAGE:
             case VIDEO:
             case SOUND:
-                return Object.class;
+                return Arrays.asList( ByteString.class, InputStream.class );
             case NULL:
             case ANY:
             case SYMBOL:
@@ -104,14 +108,14 @@ public enum PolyphenyTypeDefinition implements TypeDefinition<PolyphenyTypeDefin
             case COLUMN_LIST:
             case DYNAMIC_STAR:
             case GEOMETRY:
-                return Object.class;
+                return Collections.singletonList( Object.class );
             case MULTISET:
             case ARRAY:
             case MAP:
             case ROW:
-                return List.class;
+                return Collections.singletonList( List.class );
             case JSON:
-                return BsonValue.class;
+                return Collections.singletonList( PolyBson.class );
         }
 
         throw new UnsupportedTypeException( "Mongo", type );

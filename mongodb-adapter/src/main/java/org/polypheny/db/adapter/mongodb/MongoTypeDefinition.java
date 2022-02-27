@@ -20,7 +20,8 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.io.PushbackInputStream;
 import java.math.BigDecimal;
-import java.nio.charset.StandardCharsets;
+import java.util.Collections;
+import java.util.List;
 import lombok.Getter;
 import org.apache.calcite.avatica.util.ByteString;
 import org.bson.BsonArray;
@@ -43,7 +44,6 @@ import org.polypheny.db.type.mapping.PolyphenyTypeDefinition;
 import org.polypheny.db.type.mapping.TypeDefinition;
 import org.polypheny.db.type.mapping.TypeSpaceMapping;
 import org.polypheny.db.type.mapping.TypeSpaceMapping.UnsupportedTypeException;
-import org.polypheny.db.util.Collation;
 import org.polypheny.db.util.DateString;
 import org.polypheny.db.util.NlsString;
 import org.polypheny.db.util.PolyCollections.PolyList;
@@ -69,7 +69,12 @@ public enum MongoTypeDefinition implements TypeDefinition<MongoTypeDefinition> {
 
 
     @Override
-    public Class<?> getMappingClass( PolyType type, boolean nullable ) {
+    public List<Class<?>> getMappingClasses( PolyType type ) {
+        return Collections.singletonList( getMappingClass( type ) );
+    }
+
+
+    public Class<?> getMappingClass( PolyType type ) {
         switch ( type ) {
             case BOOLEAN:
                 return BsonBoolean.class;
@@ -318,7 +323,7 @@ public enum MongoTypeDefinition implements TypeDefinition<MongoTypeDefinition> {
 
         @Override
         public NlsString toJson( Object obj ) {
-            return new NlsString( ((BsonDocument) obj).toJson(), StandardCharsets.ISO_8859_1.name(), Collation.IMPLICIT );
+            return TypeDefinition.getNlsString( ((BsonDocument) obj).toJson() );
         }
 
 
@@ -384,7 +389,7 @@ public enum MongoTypeDefinition implements TypeDefinition<MongoTypeDefinition> {
 
         @Override
         public NlsString toVarchar( Object obj ) {
-            return new NlsString( ((BsonString) obj).getValue(), StandardCharsets.ISO_8859_1.name(), Collation.IMPLICIT );
+            return TypeDefinition.getNlsString( ((BsonString) obj).getValue() );
         }
 
 
@@ -471,5 +476,6 @@ public enum MongoTypeDefinition implements TypeDefinition<MongoTypeDefinition> {
             return ((BsonBoolean) obj).getValue();
         }
     }
+
 
 }

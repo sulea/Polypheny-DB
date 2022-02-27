@@ -17,6 +17,8 @@
 package org.polypheny.db.type.mapping;
 
 import java.math.BigDecimal;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import lombok.Getter;
@@ -49,16 +51,16 @@ public enum ExternalTypeDefinition implements TypeDefinition<ExternalTypeDefinit
 
 
     @Override
-    public Class<?> getMappingClass( PolyType type, boolean nullable ) {
+    public List<Class<?>> getMappingClasses( PolyType type ) {
         switch ( type ) {
 
             case BOOLEAN:
-                return nullable ? Boolean.class : boolean.class;
+                return Arrays.asList( Boolean.class, boolean.class );
             case TINYINT:
             case SMALLINT:
             case INTEGER:
             case DATE:
-                return nullable ? Integer.class : int.class;
+                return Arrays.asList( Integer.class, int.class );
             case BIGINT:
             case INTERVAL_YEAR:
             case INTERVAL_YEAR_MONTH:
@@ -77,25 +79,25 @@ public enum ExternalTypeDefinition implements TypeDefinition<ExternalTypeDefinit
             case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
             case TIME:
             case TIME_WITH_LOCAL_TIME_ZONE:
-                return nullable ? Long.class : long.class;
+                return Arrays.asList( Long.class, long.class );
             case DECIMAL:
-                return BigDecimal.class;
+                return Collections.singletonList( BigDecimal.class );
             case FLOAT:
             case REAL:
-                return nullable ? Float.class : float.class;
+                return Arrays.asList( Float.class, float.class );
             case DOUBLE:
-                return nullable ? Double.class : double.class;
+                return Arrays.asList( Double.class, double.class );
             case CHAR:
             case VARCHAR:
             case JSON:
-                return String.class;
+                return Collections.singletonList( String.class );
             case BINARY:
             case VARBINARY:
             case SOUND:
             case VIDEO:
             case IMAGE:
             case FILE:
-                return nullable ? Byte[].class : byte[].class;
+                return Arrays.asList( Byte[].class, byte[].class );
             case NULL:
             case GEOMETRY:
             case DYNAMIC_STAR:
@@ -105,15 +107,15 @@ public enum ExternalTypeDefinition implements TypeDefinition<ExternalTypeDefinit
             case DISTINCT:
             case SYMBOL:
             case ANY:
-                return Object.class;
+                return Collections.singletonList( Object.class );
             case ARRAY:
             case MULTISET:
             case ROW:
-                return List.class;
+                return Collections.singletonList( List.class );
             case MAP:
-                return Map.class;
+                return Collections.singletonList( Map.class );
             case COLUMN_LIST:
-                return Array.class;
+                return Collections.singletonList( Array.class );
         }
 
         throw new UnsupportedTypeException( "External", type );

@@ -26,7 +26,7 @@ import org.apache.calcite.linq4j.tree.Blocks;
 import org.apache.calcite.linq4j.tree.Expression;
 import org.apache.calcite.linq4j.tree.Expressions;
 import org.polypheny.db.adapter.DataContext;
-import org.polypheny.db.adapter.enumerable.EnumerableAlg;
+import org.polypheny.db.adapter.enumerable.EnumerableAdapterAlg;
 import org.polypheny.db.adapter.enumerable.EnumerableAlgImplementor;
 import org.polypheny.db.adapter.enumerable.PhysType;
 import org.polypheny.db.adapter.enumerable.PhysTypeImpl;
@@ -47,7 +47,7 @@ import org.polypheny.db.plan.ConventionTraitDef;
 import org.polypheny.db.type.PolyType;
 
 
-public class FileToEnumerableConverter extends ConverterImpl implements EnumerableAlg {
+public class FileToEnumerableConverter extends ConverterImpl implements EnumerableAdapterAlg {
 
     private final Method enumeratorMethod;
     private final FileSchema fileSchema;
@@ -73,7 +73,7 @@ public class FileToEnumerableConverter extends ConverterImpl implements Enumerab
 
 
     @Override
-    public Result implement( EnumerableAlgImplementor implementor, Prefer pref ) {
+    public Result implementInternal( EnumerableAlgImplementor implementor, Prefer pref ) {
         final BlockBuilder list = new BlockBuilder();
         FileConvention convention = (FileConvention) getInput().getConvention();
         PhysType physType = PhysTypeImpl.of( implementor.getTypeFactory(), getRowType(), pref.preferArray() );
@@ -153,5 +153,6 @@ public class FileToEnumerableConverter extends ConverterImpl implements Enumerab
 
         return implementor.result( physType, Blocks.toBlock( list.toBlock() ) );
     }
+
 
 }

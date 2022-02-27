@@ -508,7 +508,7 @@ public class RexToLixTranslator {
                 }
         }
         if ( convert == null ) {
-            convert = convert( operand, PolyphenyTypeDefinition.INSTANCE.getMappingClass( targetType.getPolyType(), targetType.isNullable() ) );
+            convert = convert( operand, PolyphenyTypeDefinition.INSTANCE.getGeneralizedMappingClass( targetType.getPolyType() ) );
         }
         // Going from anything to CHAR(n) or VARCHAR(n), make sure value is no longer than n.
         boolean pad = false;
@@ -721,7 +721,7 @@ public class RexToLixTranslator {
      */
     private Expression translateParameter( RexDynamicParam expr, RexImpTable.NullAs nullAs, Type storageType ) {
         if ( storageType == null ) {
-            storageType = PolyphenyTypeDefinition.INSTANCE.getMappingClass( expr.getType().getPolyType(), expr.getType().isNullable() );//typeFactory.getJavaClass( expr.getType() );
+            storageType = PolyphenyTypeDefinition.INSTANCE.getGeneralizedMappingClass( expr.getType().getPolyType() );//typeFactory.getJavaClass( expr.getType() );
         }
         return nullAs.handle(
                 convert(
@@ -761,7 +761,7 @@ public class RexToLixTranslator {
                     return RexImpTable.FALSE_EXPR;
             }
         }
-        Type javaClass = PolyphenyTypeDefinition.INSTANCE.getMappingClass( type.getPolyType(), false );
+        Type javaClass = PolyphenyTypeDefinition.INSTANCE.getGeneralizedMappingClass( type.getPolyType() );
         final Object value2;
         switch ( literal.getType().getPolyType() ) {
             case DECIMAL:

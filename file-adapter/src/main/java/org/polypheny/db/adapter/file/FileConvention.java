@@ -21,10 +21,10 @@ import lombok.Getter;
 import lombok.Setter;
 import org.apache.calcite.linq4j.tree.Expression;
 import org.polypheny.db.adapter.file.algebra.FileRules;
+import org.polypheny.db.adapter.file.algebra.FileTypeDefinition;
 import org.polypheny.db.plan.AlgOptPlanner;
 import org.polypheny.db.plan.AlgOptRule;
 import org.polypheny.db.plan.Convention;
-import org.polypheny.db.type.mapping.PolyphenyTypeDefinition;
 
 
 public class FileConvention extends Convention.Impl {
@@ -43,7 +43,7 @@ public class FileConvention extends Convention.Impl {
 
 
     public FileConvention( String name, Expression fileSchemaExpression, FileSchema fileSchema ) {
-        super( "FileConvention." + name, FileAlg.class, PolyphenyTypeDefinition.INSTANCE );
+        super( "FileConvention." + name, FileAlg.class, FileTypeDefinition.INSTANCE );
         this.fileSchemaExpression = fileSchemaExpression;
         this.fileSchema = fileSchema;
     }

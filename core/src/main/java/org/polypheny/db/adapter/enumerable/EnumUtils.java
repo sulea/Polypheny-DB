@@ -107,7 +107,7 @@ public class EnumUtils {
             @Override
             public Type get( int index ) {
                 //return EnumUtils.javaClass( typeFactory, inputTypes.get( index ) );
-                return PolyphenyTypeDefinition.INSTANCE.getMappingClass( inputTypes.get( index ).getPolyType(), false );
+                return PolyphenyTypeDefinition.INSTANCE.getGeneralizedMappingClass( inputTypes.get( index ).getPolyType() );
             }
 
 
