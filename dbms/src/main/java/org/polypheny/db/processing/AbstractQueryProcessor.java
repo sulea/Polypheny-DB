@@ -1306,8 +1306,8 @@ public abstract class AbstractQueryProcessor implements QueryProcessor, Executio
                                     log.debug(
                                             "TableID: {} is partitioned on column: {} - {}",
                                             logicalTable.getTableId(),
-                                            catalogTable.partitionColumnId,
-                                            Catalog.getInstance().getColumn( catalogTable.partitionColumnId ).name );
+                                            catalogTable.partitionProperty.partitionColumnId,
+                                            Catalog.getInstance().getColumn( catalogTable.partitionProperty.partitionColumnId ).name );
                                 }
                                 List<Long> identifiedPartitions = new ArrayList<>();
                                 for ( String partitionValue : partitionValues ) {
@@ -1315,7 +1315,7 @@ public abstract class AbstractQueryProcessor implements QueryProcessor, Executio
                                         log.debug( "Extracted PartitionValue: {}", partitionValue );
                                     }
                                     long identifiedPartition = PartitionManagerFactory.getInstance()
-                                            .getPartitionManager( catalogTable.partitionType )
+                                            .getPartitionManager( catalogTable.partitionProperty.partitionType )
                                             .getTargetPartitionId( catalogTable, partitionValue );
 
                                     identifiedPartitions.add( identifiedPartition );
@@ -1524,6 +1524,26 @@ public abstract class AbstractQueryProcessor implements QueryProcessor, Executio
                 statement );
 
         return (CachedProposedRoutingPlan) routingPlan;
+    }
+
+
+    @Override
+    public void unlock( Statement statement ) {
+        LockManager.INSTANCE.unlock( LockManager.GLOBAL_LOCK, (TransactionImpl) statement.getTransaction() );
+    }
+
+
+    /**
+     * To acquire a global shared lock for a statement.
+     * This method is used before the statistics are updated to make sure nothing changes during the updating process.
+     */
+    @Override
+    public void lock( Statement statement ) {
+        try {
+            LockManager.INSTANCE.lock( LockManager.GLOBAL_LOCK, (TransactionImpl) statement.getTransaction(), LockMode.SHARED );
+        } catch ( DeadlockException e ) {
+            throw new RuntimeException( "DeadLock while locking to reevaluate statistics", e );
+        }
     }
 
 }
