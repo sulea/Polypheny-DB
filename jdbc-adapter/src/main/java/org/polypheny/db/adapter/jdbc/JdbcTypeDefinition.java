@@ -62,14 +62,15 @@ public enum JdbcTypeDefinition implements TypeDefinition<JdbcTypeDefinition> {
     @Override
     public List<Class<?>> getMappingClasses( PolyType type ) {
         switch ( type ) {
-
             case BOOLEAN:
-                return Arrays.asList( Boolean.class, boolean.class );
+                return List.of( Boolean.class );
             case TINYINT:
+                return List.of( Byte.class, Integer.class, Long.class );
             case SMALLINT:
             case INTEGER:
-                return Arrays.asList( Integer.class, int.class );
+                return List.of( Integer.class );
             case BIGINT:
+                return List.of( Integer.class, Long.class );
             case INTERVAL_YEAR:
             case INTERVAL_YEAR_MONTH:
             case INTERVAL_MONTH:
@@ -83,14 +84,14 @@ public enum JdbcTypeDefinition implements TypeDefinition<JdbcTypeDefinition> {
             case INTERVAL_MINUTE:
             case INTERVAL_MINUTE_SECOND:
             case INTERVAL_SECOND:
-                return Arrays.asList( Long.class, long.class );
+                return List.of( Long.class );
             case DECIMAL:
                 return Collections.singletonList( BigDecimal.class );
             case FLOAT:
             case REAL:
-                return Arrays.asList( Float.class, float.class );
+                //return Arrays.asList( Float.class, float.class );
             case DOUBLE:
-                return Arrays.asList( Double.class, double.class );
+                return List.of( Double.class );
             case DATE:
                 return Collections.singletonList( Date.class );
             case TIME_WITH_LOCAL_TIME_ZONE:
@@ -249,7 +250,11 @@ public enum JdbcTypeDefinition implements TypeDefinition<JdbcTypeDefinition> {
 
         @Override
         public BigDecimal toFloat( Object obj ) {
-            return BigDecimal.valueOf( (Float) obj );
+            if ( obj instanceof Float ) {
+                return BigDecimal.valueOf( (Float) obj );
+            } else {
+                return BigDecimal.valueOf( (Double) obj );
+            }
         }
 
 

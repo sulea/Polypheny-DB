@@ -99,7 +99,7 @@ public interface EnumerableAdapterAlg extends EnumerableAlg {
         List<Expression> expressions = new ArrayList<>();
         for ( AlgDataTypeField field : rowType.getFieldList() ) {
 
-            Expression exp = getter.field( builder2, field.getIndex(), null );
+            Expression exp = getter.field( builder2, field.getIndex(), Object.class );
 
             String method = TypeSpaceMapping.getMethodName( field.getType().getPolyType() );
             exp = Expressions.convert_( exp, Object.class );

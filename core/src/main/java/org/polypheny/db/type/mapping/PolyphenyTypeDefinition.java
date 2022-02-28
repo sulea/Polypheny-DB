@@ -27,6 +27,7 @@ import org.polypheny.db.type.mapping.TypeSpaceMapping.UnsupportedTypeException;
 import org.polypheny.db.util.DateString;
 import org.polypheny.db.util.NlsString;
 import org.polypheny.db.util.PolyBson;
+import org.polypheny.db.util.PolyCollections.PolyList;
 import org.polypheny.db.util.TimeString;
 import org.polypheny.db.util.TimestampString;
 
@@ -50,22 +51,22 @@ public enum PolyphenyTypeDefinition implements TypeDefinition<PolyphenyTypeDefin
     public List<Class<?>> getMappingClasses( PolyType type ) {
         switch ( type ) {
             case BOOLEAN:
-                return Arrays.asList( Boolean.class, boolean.class );
+                return List.of( Boolean.class );
             case TINYINT:
                 //return nullable ? Byte.class : byte.class;
             case SMALLINT:
                 //return nullable ? Short.class : short.class;
             case INTEGER:
-                return Arrays.asList( Integer.class, int.class );
+                return List.of( Integer.class );
             case BIGINT:
-                return Arrays.asList( Long.class, long.class );
+                return List.of( Long.class );
             case DECIMAL:
                 return Collections.singletonList( BigDecimal.class );
             case FLOAT:
             case REAL:
-                return Arrays.asList( Float.class, float.class );
+                return List.of( BigDecimal.class );
             case DOUBLE:
-                return Arrays.asList( Double.class, double.class );
+                return Arrays.asList( BigDecimal.class );
             case DATE:
                 return Collections.singletonList( DateString.class );
             case TIME:
@@ -87,7 +88,7 @@ public enum PolyphenyTypeDefinition implements TypeDefinition<PolyphenyTypeDefin
             case INTERVAL_MINUTE:
             case INTERVAL_MINUTE_SECOND:
             case INTERVAL_SECOND:
-                return Arrays.asList( Long.class, long.class );
+                return List.of( Long.class );
             case CHAR:
             case VARCHAR:
                 return Collections.singletonList( NlsString.class );
@@ -113,7 +114,7 @@ public enum PolyphenyTypeDefinition implements TypeDefinition<PolyphenyTypeDefin
             case ARRAY:
             case MAP:
             case ROW:
-                return Collections.singletonList( List.class );
+                return Collections.singletonList( PolyList.class );
             case JSON:
                 return Collections.singletonList( PolyBson.class );
         }

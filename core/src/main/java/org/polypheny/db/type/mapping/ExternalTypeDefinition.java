@@ -264,8 +264,8 @@ public enum ExternalTypeDefinition implements TypeDefinition<ExternalTypeDefinit
 
 
         @Override
-        public Byte toSmallInt( Object obj ) {
-            return ((Integer) obj).byteValue();
+        public Short toSmallInt( Object obj ) {
+            return toTinyInt( obj );
         }
 
 
