@@ -17,6 +17,9 @@
 package org.polypheny.db.sql.language.ddl.alterschema;
 
 
+import org.polypheny.db.catalog.Catalog;
+import org.polypheny.db.catalog.entity.CatalogTable;
+import org.polypheny.db.catalog.exceptions.EntityAlreadyExistsException;
 import org.polypheny.db.catalog.exceptions.UnknownSchemaException;
 import org.polypheny.db.catalog.exceptions.UnknownUserException;
 import org.polypheny.db.ddl.DdlManager;
@@ -43,29 +46,29 @@ import static org.polypheny.db.util.Static.RESOURCE;
  */
 public class SqlAlterSchemaTransferTable extends SqlAlterSchema {
 
-    private final SqlIdentifier name;
+    private final SqlIdentifier table;
     private final SqlIdentifier targetSchema;
 
 
     /**
      * Creates a SqlAlterSchemaOwner.
      */
-    public SqlAlterSchemaTransferTable(ParserPos pos, SqlIdentifier name, SqlIdentifier targetSchema) {
+    public SqlAlterSchemaTransferTable(ParserPos pos, SqlIdentifier table, SqlIdentifier targetSchema) {
         super( pos );
-        this.name = Objects.requireNonNull(name);
+        this.table = Objects.requireNonNull(table);
         this.targetSchema = Objects.requireNonNull(targetSchema);
     }
 
 
     @Override
     public List<Node> getOperandList() {
-        return ImmutableNullableList.of(name, targetSchema);
+        return ImmutableNullableList.of(table, targetSchema);
     }
 
 
     @Override
     public List<SqlNode> getSqlOperandList() {
-        return ImmutableNullableList.of(name, targetSchema);
+        return ImmutableNullableList.of(table, targetSchema);
     }
 
 
@@ -73,7 +76,7 @@ public class SqlAlterSchemaTransferTable extends SqlAlterSchema {
     public void unparse( SqlWriter writer, int leftPrec, int rightPrec ) {
         writer.keyword( "ALTER" );
         writer.keyword( "SCHEMA" );
-        name.unparse( writer, leftPrec, rightPrec );
+        table.unparse( writer, leftPrec, rightPrec );
         writer.keyword( "OWNER" );
         writer.keyword( "TO" );
         targetSchema.unparse( writer, leftPrec, rightPrec );
@@ -83,11 +86,16 @@ public class SqlAlterSchemaTransferTable extends SqlAlterSchema {
     @Override
     public void execute( Context context, Statement statement, QueryParameters parameters ) {
         try {
-            DdlManager.getInstance().alterSchemaOwner( name.getSimple(), targetSchema.getSimple(), context.getDatabaseId() );
+            Catalog catalog = Catalog.getInstance();
+            CatalogTable catalogTable = getCatalogTable( context, table);
+
+            long targetSchemaId = catalog.getSchema( context.getDatabaseId(), targetSchema.getNames().get(0) ).id;
+            DdlManager.getInstance().transferTable( catalogTable, targetSchemaId, statement );
+
         } catch ( UnknownSchemaException e ) {
-            throw CoreUtil.newContextException( name.getPos(), RESOURCE.schemaNotFound( name.getSimple() ) );
-        } catch ( UnknownUserException e ) {
-            throw CoreUtil.newContextException( targetSchema.getPos(), RESOURCE.userNotFound( targetSchema.getSimple() ) );
+            throw CoreUtil.newContextException( table.getPos(), RESOURCE.schemaNotFound( table.getSimple() ) );
+        } catch (EntityAlreadyExistsException e) {
+            throw CoreUtil.newContextException( table.getPos(), RESOURCE.tableExists(  table.names.get( 1 ) ) );
         }
     }
 

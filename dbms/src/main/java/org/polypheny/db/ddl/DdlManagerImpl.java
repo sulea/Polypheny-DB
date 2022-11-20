@@ -127,17 +127,22 @@ import org.polypheny.db.partition.properties.PartitionProperty;
 import org.polypheny.db.partition.properties.TemperaturePartitionProperty;
 import org.polypheny.db.partition.properties.TemperaturePartitionProperty.PartitionCostIndication;
 import org.polypheny.db.partition.raw.RawTemperaturePartitionInformation;
+import org.polypheny.db.prepare.Context;
 import org.polypheny.db.processing.DataMigrator;
 import org.polypheny.db.routing.RoutingManager;
 import org.polypheny.db.runtime.PolyphenyDbContextException;
 import org.polypheny.db.runtime.PolyphenyDbException;
 import org.polypheny.db.schema.LogicalTable;
 import org.polypheny.db.schema.PolySchemaBuilder;
+import org.polypheny.db.sql.language.SqlIdentifier;
 import org.polypheny.db.transaction.Statement;
 import org.polypheny.db.transaction.TransactionException;
 import org.polypheny.db.type.ArrayType;
 import org.polypheny.db.type.PolyType;
+import org.polypheny.db.util.CoreUtil;
 import org.polypheny.db.view.MaterializedViewManager;
+
+import static org.polypheny.db.util.Static.RESOURCE;
 
 
 @Slf4j
@@ -2242,6 +2247,15 @@ public class DdlManagerImpl extends DdlManager {
         }
     }
 
+    @Override
+    public void transferTable( CatalogTable table, long targetSchemaId, Statement statement) throws EntityAlreadyExistsException {
+        // Check if there is already an entity with this name
+        if ( assertEntityExists( targetSchemaId, table.name, true ) ) {
+            return;
+        }
+        long newTableId = catalog.transferTable(table, targetSchemaId);
+    }
+
 
     @Override
     public void createCollection( long schemaId, String name, boolean ifNotExists, List<DataStore> stores, PlacementType placementType, Statement statement ) throws EntityAlreadyExistsException {
@@ -3135,6 +3149,32 @@ public class DdlManagerImpl extends DdlManager {
         }
     }
 
+    protected CatalogTable getCatalogTable( Context context, SqlIdentifier tableName ) {
+        CatalogTable catalogTable;
+        try {
+            long schemaId;
+            String tableOldName;
+            Catalog catalog = Catalog.getInstance();
+            if ( tableName.names.size() == 3 ) { // DatabaseName.SchemaName.TableName
+                schemaId = catalog.getSchema( tableName.names.get( 0 ), tableName.names.get( 1 ) ).id;
+                tableOldName = tableName.names.get( 2 );
+            } else if ( tableName.names.size() == 2 ) { // SchemaName.TableName
+                schemaId = catalog.getSchema( context.getDatabaseId(), tableName.names.get( 0 ) ).id;
+                tableOldName = tableName.names.get( 1 );
+            } else { // TableName
+                schemaId = catalog.getSchema( context.getDatabaseId(), context.getDefaultSchemaName() ).id;
+                tableOldName = tableName.names.get( 0 );
+            }
+            catalogTable = catalog.getTable( schemaId, tableOldName );
+        } catch ( UnknownDatabaseException e ) {
+            throw CoreUtil.newContextException( tableName.getPos(), RESOURCE.databaseNotFound( tableName.toString() ) );
+        } catch ( UnknownSchemaException e ) {
+            throw CoreUtil.newContextException( tableName.getPos(), RESOURCE.schemaNotFound( tableName.toString() ) );
+        } catch ( UnknownTableException e ) {
+            throw CoreUtil.newContextException( tableName.getPos(), RESOURCE.tableNotFound( tableName.toString() ) );
+        }
+        return catalogTable;
+    }
 
     @Override
     public void dropFunction() {

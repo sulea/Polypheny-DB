@@ -1900,6 +1900,67 @@ public class CatalogImpl extends Catalog {
         return id;
     }
 
+    @Override
+    public long transferTable( CatalogTable sourceTable, long targetNamespaceId ) {
+        CatalogSchema targetSchema = getSchema( targetNamespaceId );
+        long targetTableId = entityIdBuilder.getAndIncrement();
+
+        //deleteTable(sourceTable.id);
+        //Technically every Table is partitioned. But tables classified as UNPARTITIONED only consist of one PartitionGroup and one large partition
+        CatalogTable targetTable = new CatalogTable(
+                targetTableId,
+                sourceTable.name,
+                sourceTable.fieldIds,
+                targetNamespaceId,
+                sourceTable.databaseId,
+                sourceTable.ownerId,
+                sourceTable.entityType,
+                sourceTable.primaryKey,
+                sourceTable.dataPlacements,
+                sourceTable.modifiable,
+                sourceTable.partitionProperty,
+                sourceTable.connectedViews );
+
+        updateEntityLogistics( targetTable.name, targetNamespaceId, targetTableId, targetSchema, targetTable );
+
+        List<Long> children = new ArrayList<>( Objects.requireNonNull( schemaChildren.get( sourceTable.namespaceId ) ) );
+        children.remove( sourceTable.id );
+        synchronized ( this ) {
+            schemaChildren.replace( sourceTable.namespaceId, ImmutableList.copyOf( children ) );
+
+            if ( sourceTable.partitionProperty.reliesOnPeriodicChecks ) {
+                removeTableFromPeriodicProcessing( sourceTable.id );
+            }
+
+            if ( sourceTable.partitionProperty.isPartitioned ) {
+                for ( Long partitionGroupId : Objects.requireNonNull( sourceTable.partitionProperty.partitionGroupIds ) ) {
+                    deletePartitionGroup( sourceTable.id, sourceTable.namespaceId, partitionGroupId );
+                }
+            }
+
+            for ( Long columnId : Objects.requireNonNull( tableChildren.get( sourceTable.id ) ) ) {
+                deleteColumn( columnId );
+            }
+
+            // Remove all placement containers along with all placements
+            sourceTable.dataPlacements.forEach( adapterId -> removeDataPlacement( adapterId, sourceTable.id ) );
+
+            tableChildren.remove( sourceTable.id );
+            tables.remove( sourceTable.id );
+            tableNames.remove( new Object[]{ sourceTable.databaseId, sourceTable.namespaceId, sourceTable.name } );
+            flagTableForDeletion( sourceTable.id, false );
+            // primary key was deleted and open table has to be closed
+            if ( openTable != null && openTable == sourceTable.id ) {
+                openTable = null;
+            }
+
+        }
+        listeners.firePropertyChange( "table", sourceTable, null );
+
+        return targetTableId;
+    }
+
+
 
     /**
      * {@inheritDoc}

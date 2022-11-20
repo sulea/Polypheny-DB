@@ -237,6 +237,11 @@ public enum Kind {
     MERGE,
 
     /**
+     * TRANSFER statement
+     */
+    TRANSFER,
+
+    /**
      * TABLESAMPLE operator
      */
     TABLESAMPLE,
