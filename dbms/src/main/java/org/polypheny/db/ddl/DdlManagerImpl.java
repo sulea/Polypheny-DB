@@ -128,6 +128,7 @@ import org.polypheny.db.partition.properties.TemperaturePartitionProperty;
 import org.polypheny.db.partition.properties.TemperaturePartitionProperty.PartitionCostIndication;
 import org.polypheny.db.partition.raw.RawTemperaturePartitionInformation;
 import org.polypheny.db.prepare.Context;
+import org.polypheny.db.prepare.PolyphenyDbCatalogReader;
 import org.polypheny.db.processing.DataMigrator;
 import org.polypheny.db.routing.RoutingManager;
 import org.polypheny.db.runtime.PolyphenyDbContextException;
@@ -2254,6 +2255,17 @@ public class DdlManagerImpl extends DdlManager {
             return;
         }
         long newTableId = catalog.transferTable(table, targetSchemaId);
+
+        //statement.getTransaction().getSchema().add(table.name, catalog.getSchema( targetSchemaId )., NamespaceType.DOCUMENT);
+
+        /*
+        if ( catalog.getSchema( targetSchemaId ).namespaceType == NamespaceType.DOCUMENT ) {
+            PolyphenyDbCatalogReader catalogReader = statement.getTransaction().getCatalogReader();
+            catalogReader.getSchemaPaths().add(List.of("kaka", "maka"));
+            statement.getTransaction().getCatalogReader();
+        }
+
+         */
     }
 
 

@@ -20,6 +20,8 @@ package org.polypheny.db.sql.language.ddl;
 import static org.polypheny.db.util.Static.RESOURCE;
 
 import org.polypheny.db.algebra.constant.Kind;
+import org.polypheny.db.catalog.Catalog;
+import org.polypheny.db.catalog.entity.CatalogColumn;
 import org.polypheny.db.catalog.entity.CatalogTable;
 import org.polypheny.db.ddl.DdlManager;
 import org.polypheny.db.ddl.exception.DdlOnSourceException;
@@ -32,6 +34,8 @@ import org.polypheny.db.sql.language.SqlOperator;
 import org.polypheny.db.sql.language.SqlSpecialOperator;
 import org.polypheny.db.transaction.Statement;
 import org.polypheny.db.util.CoreUtil;
+
+import java.util.List;
 
 
 /**
@@ -66,6 +70,9 @@ public class SqlDropTable extends SqlDropObject {
         }
 
         try {
+            Catalog catalog = Catalog.getInstance();
+            List<CatalogColumn> columns = catalog.getColumns(table.id);
+
             DdlManager.getInstance().dropTable( table, statement );
         } catch ( DdlOnSourceException e ) {
             throw CoreUtil.newContextException( name.getPos(), RESOURCE.ddlOnSourceTable() );
