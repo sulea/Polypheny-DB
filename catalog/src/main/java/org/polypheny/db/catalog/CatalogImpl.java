@@ -17,8 +17,6 @@
 package org.polypheny.db.catalog;
 
 
-import com.google.common.base.Predicates;
-import com.google.common.collect.Collections2;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import java.io.File;
@@ -1894,36 +1892,91 @@ public class CatalogImpl extends Catalog {
     }
 
     @Override
-    public long transferTable( CatalogTable sourceTable, long targetNamespaceId ) {
-
-        CatalogTable targetTable = transferCatalogTable( sourceTable, targetNamespaceId );
+    public CatalogTable transferTable(CatalogTable sourceTable, long targetNamespaceId ) {
+        long targetTableId = entityIdBuilder.getAndIncrement();
+        CatalogTable targetTable;
         synchronized ( this ) {
-            ImmutableList<Long> reducedSourceSchemaChildren = ImmutableList
-                    .copyOf( Collections2.filter( schemaChildren.get( sourceTable.namespaceId ),
-                            Predicates.not( Predicates.equalTo( sourceTable.id ) ) ) );
-            ImmutableList<Long> extendedTargetSchemaChildren = new ImmutableList.Builder<Long>()
-                    .addAll( schemaChildren.get(targetNamespaceId ) )
-                    .add( targetTable.id )
-                    .build();
 
-            schemaChildren.replace( sourceTable.namespaceId, reducedSourceSchemaChildren );
-            schemaChildren.replace( targetNamespaceId, extendedTargetSchemaChildren );
+            List<Long> fieldIds = new ArrayList<>();
 
-            tables.replace( sourceTable.id, targetTable );
-            tableNames.remove( new Object[]{ sourceTable.databaseId, sourceTable.namespaceId, sourceTable.name } );
-            tableNames.put( new Object[]{ targetTable.databaseId, targetNamespaceId, targetTable.name }, targetTable );
+            // Transfer columns
+            // TODO: dies wird nur dann gemacht wenn zwischen den gleichen namespacetzpes kopieren
 
+            Map<Long, Long> sourceTargetColumnIdMap = new HashMap<>();
             for( Long fieldId: sourceTable.fieldIds ) {
-                CatalogColumn targetCatalogColumn = transferCatalogColumn( targetNamespaceId, columns.get( fieldId ) );
-                columns.replace( fieldId, targetCatalogColumn );
-                columnNames.remove( new Object[]{sourceTable.databaseId, sourceTable.namespaceId, sourceTable.id, targetCatalogColumn.name } );
-                columnNames.put( new Object[]{sourceTable.databaseId, targetNamespaceId, sourceTable.id, targetCatalogColumn.name }, targetCatalogColumn );
+                long targetColumnId = columnIdBuilder.getAndIncrement();
+                sourceTargetColumnIdMap.put(fieldId, targetColumnId);
+
+                CatalogColumn targetColumn = transferColumn(columns.get( fieldId ), targetNamespaceId, targetColumnId );
+                columns.put( targetColumnId, targetColumn );
+                columnNames.put( new Object[]{ sourceTable.databaseId, targetNamespaceId, targetTableId, targetColumn.name }, targetColumn );
+                fieldIds.add(targetColumnId);
+
                 // TODO: primaryKeys, foreignKeys, constraints!
             }
-        }
-        listeners.firePropertyChange( "table", sourceTable, null );
 
-        return sourceTable.id;
+            // Add to frequencyDependentTables
+            if ( frequencyDependentTables.contains( sourceTable.id ) ) {
+                frequencyDependentTables.add(targetTableId);
+            }
+
+            // transfer Partitions and Dataplacements.
+            CatalogPartitionGroup targetPartitionGroup = transferPartitionGroup( partitionGroups.get( sourceTable.id ),
+                    targetNamespaceId, targetTableId );
+            partitionGroups.put( targetTableId, targetPartitionGroup);
+
+            for ( CatalogDataPlacement sourceDataPlacement : getDataPlacements( sourceTable.id ) ) {
+                CatalogDataPlacement targetDataPlacement =
+                        transferDataPlacement( sourceDataPlacement, targetTableId, sourceTargetColumnIdMap );
+                dataPlacements.put( new Object[]{targetDataPlacement.adapterId, targetTableId}, targetDataPlacement );
+            }
+
+            for ( CatalogPartitionPlacement sourcePartitionPlacement : getAllPartitionPlacementsByTable( sourceTable.id ) ) {
+                CatalogPartitionPlacement targetPartitionPlacement = transferPartitionPlacement( sourcePartitionPlacement, targetTableId );
+                partitionPlacements.put( new Object[]{ targetPartitionPlacement.adapterId, sourcePartitionPlacement.partitionId },
+                        targetPartitionPlacement );
+            }
+
+            // Transfer table
+            targetTable = transferTable( sourceTable, targetNamespaceId, targetTableId, ImmutableList.copyOf(fieldIds) );
+            ImmutableList<Long> extendedTargetSchemaChildren = new ImmutableList.Builder<Long>()
+                    .addAll( schemaChildren.get(targetNamespaceId ) )
+                    .add( targetTableId )
+                    .build();
+            tables.put( targetTableId, targetTable );
+            tableNames.put( new Object[]{ targetTable.databaseId, targetNamespaceId, targetTable.name }, targetTable );
+            schemaChildren.replace( targetNamespaceId, extendedTargetSchemaChildren );
+
+            if ( getSchema( targetNamespaceId ).namespaceType == NamespaceType.DOCUMENT ) {
+                CatalogCollection targetCatalogCollection = new CatalogCollection(
+                        targetTable.databaseId,
+                        targetTable.namespaceId,
+                        targetTable.id,
+                        targetTable.name,
+                        targetTable.dataPlacements,
+                        targetTable.entityType,
+                        null);
+
+                collections.put( targetCatalogCollection.id, targetCatalogCollection );
+                collectionNames.put(
+                        new Object[]{ targetCatalogCollection.databaseId, targetCatalogCollection.namespaceId, targetCatalogCollection.name },
+                        targetCatalogCollection );
+
+                CatalogCollectionPlacement catalogCollectionPlacement = new CatalogCollectionPlacement(
+                        sourceTable.dataPlacements.get(0),
+                        targetCatalogCollection.id,
+                        null,
+                        null,
+                        partitionIdBuilder.getAndIncrement());
+
+                collectionPlacements.put(
+                        new Object[]{ targetCatalogCollection.id, sourceTable.dataPlacements.get(0) },
+                        catalogCollectionPlacement );
+            }
+        }
+        listeners.firePropertyChange( "table", targetTable, null );
+
+        return targetTable;
     }
 
     /**
@@ -4658,8 +4711,8 @@ public class CatalogImpl extends Catalog {
     public List<CatalogPartitionPlacement> getPartitionPlacementsByRole( long tableId, DataPlacementRole role ) {
         List<CatalogPartitionPlacement> partitionPlacements = new ArrayList<>();
         for ( CatalogDataPlacement dataPlacement : getDataPlacementsByRole( tableId, role ) ) {
-            if ( dataPlacement.partitionPlacementsOnAdapterByRole.containsKey( role ) ) {
-                dataPlacement.partitionPlacementsOnAdapterByRole.get( role )
+            if ( dataPlacement.structurizePartitionPlacementsOnAdapterByRole.containsKey( role ) ) {
+                dataPlacement.structurizePartitionPlacementsOnAdapterByRole.get( role )
                         .forEach(
                                 partitionId -> partitionPlacements.add( getPartitionPlacement( dataPlacement.adapterId, partitionId ) )
                         );
@@ -5506,9 +5559,9 @@ public class CatalogImpl extends Catalog {
     }
 
     @NotNull
-    private static CatalogColumn transferCatalogColumn(long targetNamespaceId, CatalogColumn sourceCatalogColumn) {
+    private static CatalogColumn transferColumn(CatalogColumn sourceCatalogColumn, long targetNamespaceId, long targetColumnId) {
         CatalogColumn targetCatalogColumn = new CatalogColumn(
-                sourceCatalogColumn.id,
+                targetColumnId,
                 sourceCatalogColumn.name,
                 sourceCatalogColumn.tableId,
                 targetNamespaceId,
@@ -5528,11 +5581,11 @@ public class CatalogImpl extends Catalog {
 
 
     @NotNull
-    private CatalogTable transferCatalogTable(CatalogTable sourceTable, long targetNamespaceId) {
+    private CatalogTable transferTable(CatalogTable sourceTable, long targetNamespaceId, long targetTableId, ImmutableList<Long> fieldIds ) {
         return new CatalogTable(
-                sourceTable.id,
+                targetTableId,
                 sourceTable.name,
-                sourceTable.fieldIds,
+                fieldIds,
                 targetNamespaceId,
                 sourceTable.databaseId,
                 sourceTable.ownerId,
@@ -5542,6 +5595,49 @@ public class CatalogImpl extends Catalog {
                 sourceTable.modifiable,
                 sourceTable.partitionProperty,
                 sourceTable.connectedViews);
+    }
+
+    private CatalogPartitionGroup transferPartitionGroup(CatalogPartitionGroup catalogPartitionGroup, long targetNamespaceId, long targetTableId) {
+        return new CatalogPartitionGroup(
+                targetTableId,
+                catalogPartitionGroup.partitionGroupName,
+                targetTableId,
+                targetNamespaceId,
+                catalogPartitionGroup.databaseId,
+                catalogPartitionGroup.partitionKey,
+                catalogPartitionGroup.partitionQualifiers,
+                catalogPartitionGroup.partitionIds,
+                catalogPartitionGroup.isUnbound);
+    }
+
+    private CatalogDataPlacement transferDataPlacement( CatalogDataPlacement sourceDataPlacement, long targetTableId,
+                                                            Map<Long, Long> sourceTargetColumnIdMap ) {
+        ImmutableList<Long> targetColumnPlacementsOnAdapter = ImmutableList.<Long>builder()
+                .addAll(new ArrayList<>(sourceDataPlacement.columnPlacementsOnAdapter)
+                        .stream()
+                        .map(x -> sourceTargetColumnIdMap.get(x))
+                        .collect(Collectors.toList()))
+                .build();
+
+        return new CatalogDataPlacement(
+                targetTableId,
+                sourceDataPlacement.adapterId,
+                sourceDataPlacement.placementType,
+                sourceDataPlacement.dataPlacementRole,
+                targetColumnPlacementsOnAdapter,
+                sourceDataPlacement.partitionPlacementsOnAdapter);
+    }
+
+    private CatalogPartitionPlacement transferPartitionPlacement(CatalogPartitionPlacement sourcePartitionPlacement, long targetTableId) {
+        return new CatalogPartitionPlacement(
+                targetTableId,
+                sourcePartitionPlacement.adapterId,
+                sourcePartitionPlacement.adapterUniqueName,
+                sourcePartitionPlacement.placementType,
+                sourcePartitionPlacement.physicalSchemaName,
+                sourcePartitionPlacement.physicalTableName,
+                sourcePartitionPlacement.partitionId,
+                sourcePartitionPlacement.role);
     }
 
 

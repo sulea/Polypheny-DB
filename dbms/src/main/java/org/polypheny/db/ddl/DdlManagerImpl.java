@@ -2249,23 +2249,23 @@ public class DdlManagerImpl extends DdlManager {
     }
 
     @Override
-    public void transferTable( CatalogTable table, long targetSchemaId, Statement statement) throws EntityAlreadyExistsException {
+    public void transferTable( CatalogTable sourceTable, long targetSchemaId, Statement statement) throws EntityAlreadyExistsException {
         // Check if there is already an entity with this name
-        if ( assertEntityExists( targetSchemaId, table.name, true ) ) {
+        if ( assertEntityExists( targetSchemaId, sourceTable.name, true ) ) {
             return;
         }
-        long newTableId = catalog.transferTable(table, targetSchemaId);
+        CatalogTable targetCatalogTable = catalog.transferTable(sourceTable, targetSchemaId);
+
+        catalog.deleteTable(sourceTable.id);
 
         //statement.getTransaction().getSchema().add(table.name, catalog.getSchema( targetSchemaId )., NamespaceType.DOCUMENT);
 
-        /*
+
         if ( catalog.getSchema( targetSchemaId ).namespaceType == NamespaceType.DOCUMENT ) {
-            PolyphenyDbCatalogReader catalogReader = statement.getTransaction().getCatalogReader();
-            catalogReader.getSchemaPaths().add(List.of("kaka", "maka"));
-            statement.getTransaction().getCatalogReader();
+
         }
 
-         */
+
     }
 
 

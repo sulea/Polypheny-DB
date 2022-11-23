@@ -54,7 +54,9 @@ public class CatalogDataPlacement implements CatalogObject {
 
     // Serves as a pre-aggregation to apply filters more easily. In that case reads are more important
     // and frequent than writes
-    public final ImmutableMap<DataPlacementRole, ImmutableList<Long>> partitionPlacementsOnAdapterByRole;
+    public final ImmutableMap<DataPlacementRole, ImmutableList<Long>> structurizePartitionPlacementsOnAdapterByRole;
+
+    public final ImmutableList<Long> partitionPlacementsOnAdapter;
 
 
     // The newest commit timestamp when any partitions inside this placement has been updated or refreshed
@@ -78,7 +80,8 @@ public class CatalogDataPlacement implements CatalogObject {
         this.placementType = placementType;
         this.dataPlacementRole = dataPlacementRole;
         this.columnPlacementsOnAdapter = columnPlacementsOnAdapter;
-        this.partitionPlacementsOnAdapterByRole = structurizeDataPlacements( partitionPlacementsOnAdapter );
+        this.partitionPlacementsOnAdapter = partitionPlacementsOnAdapter;
+        this.structurizePartitionPlacementsOnAdapterByRole = structurizeDataPlacements( partitionPlacementsOnAdapter );
 
     }
 
@@ -111,7 +114,7 @@ public class CatalogDataPlacement implements CatalogObject {
 
 
     public List<Long> getAllPartitionIds() {
-        return partitionPlacementsOnAdapterByRole.values()
+        return structurizePartitionPlacementsOnAdapterByRole.values()
                 .stream()
                 .flatMap( List::stream )
                 .collect( Collectors.toList() );

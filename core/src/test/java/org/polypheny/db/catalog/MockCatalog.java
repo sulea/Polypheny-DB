@@ -352,7 +352,7 @@ public abstract class MockCatalog extends Catalog {
     }
 
     @Override
-    public long transferTable( CatalogTable sourceTable, long targetNamespaceId ) {
+    public CatalogTable transferTable(CatalogTable sourceTable, long targetNamespaceId ) {
         throw new NotImplementedException();
     }
 

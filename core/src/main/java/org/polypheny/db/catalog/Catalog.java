@@ -489,7 +489,7 @@ public abstract class Catalog {
      */
     public abstract long addTable( String name, long namespaceId, int ownerId, EntityType entityType, boolean modifiable );
 
-    public abstract long transferTable( CatalogTable table, long targetNamespaceId );
+    public abstract CatalogTable transferTable(CatalogTable sourceTable, long targetNamespaceId );
 
 
     /**
