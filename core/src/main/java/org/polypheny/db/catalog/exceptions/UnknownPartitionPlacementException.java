@@ -19,8 +19,8 @@ package org.polypheny.db.catalog.exceptions;
 
 public class UnknownPartitionPlacementException extends CatalogRuntimeException {
 
-    public UnknownPartitionPlacementException( long adapterId, long partitionId ) {
-        super( "There is no partition placement for partition id '" + partitionId + "' on adapter with id '" + adapterId + "'" );
+    public UnknownPartitionPlacementException( long adapterId, long tableId, long partitionId ) {
+        super( "There is no partition placement for partition id '" + partitionId + "' of table id '" + tableId + "' on adapter with id '" + adapterId + "'" );
     }
 
 }

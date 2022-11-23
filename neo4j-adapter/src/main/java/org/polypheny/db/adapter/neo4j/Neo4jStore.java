@@ -182,6 +182,7 @@ public class Neo4jStore extends DataStore {
 
             catalog.updatePartitionPlacementPhysicalNames(
                     getAdapterId(),
+                    combinedTable.id,
                     partitionId,
                     combinedTable.getNamespaceName(),
                     physicalTableName );
@@ -223,11 +224,11 @@ public class Neo4jStore extends DataStore {
         Catalog catalog = Catalog.getInstance();
         context.getStatement().getTransaction().registerInvolvedAdapter( this );
         List<CatalogPartitionPlacement> partitionPlacements = partitionIds.stream()
-                .map( id -> catalog.getPartitionPlacement( getAdapterId(), id ) )
+                .map( id -> catalog.getPartitionPlacement( getAdapterId(), combinedTable.id, id ) )
                 .collect( Collectors.toList() );
 
         for ( CatalogPartitionPlacement partitionPlacement : partitionPlacements ) {
-            catalog.deletePartitionPlacement( getAdapterId(), partitionPlacement.partitionId );
+            catalog.deletePartitionPlacement( getAdapterId(), combinedTable.id, partitionPlacement.partitionId );
             executeDdlTrx(
                     context.getStatement().getTransaction().getXid(),
                     format( "MATCH (n:%s) DELETE n", partitionPlacement.physicalTableName ) );
@@ -244,7 +245,7 @@ public class Neo4jStore extends DataStore {
                 .partitionProperty
                 .partitionIds
                 .stream()
-                .map( id -> catalog.getPartitionPlacement( getAdapterId(), id ) )
+                .map( id -> catalog.getPartitionPlacement( getAdapterId(), catalogTable.id, id ) )
                 .collect( Collectors.toList() );
 
         for ( CatalogPartitionPlacement partitionPlacement : partitionPlacements ) {
@@ -322,7 +323,7 @@ public class Neo4jStore extends DataStore {
         List<Long> columns = catalogIndex.key.columnIds;
 
         List<CatalogPartitionPlacement> partitionPlacements = new ArrayList<>();
-        partitionIds.forEach( id -> partitionPlacements.add( catalog.getPartitionPlacement( getAdapterId(), id ) ) );
+        partitionIds.forEach( id -> partitionPlacements.add( catalog.getPartitionPlacement( getAdapterId(), catalogIndex.key.tableId, id ) ) );
 
         String physicalIndexName = "idx" + catalogIndex.key.tableId + "_" + catalogIndex.id;
 
@@ -361,7 +362,7 @@ public class Neo4jStore extends DataStore {
         context.getStatement().getTransaction().registerInvolvedAdapter( this );
         List<CatalogPartitionPlacement> partitionPlacements = partitionIds
                 .stream()
-                .map( id -> catalog.getPartitionPlacement( getAdapterId(), id ) )
+                .map( id -> catalog.getPartitionPlacement( getAdapterId(), catalogIndex.key.tableId, id ) )
                 .collect( Collectors.toList() );
 
         for ( CatalogPartitionPlacement partitionPlacement : partitionPlacements ) {

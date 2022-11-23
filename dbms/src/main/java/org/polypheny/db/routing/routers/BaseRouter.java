@@ -231,7 +231,7 @@ public abstract class BaseRouter implements Router {
             if ( placementsByAdapter.size() == 1 ) {
                 List<CatalogColumnPlacement> ccps = placementsByAdapter.values().iterator().next();
                 CatalogColumnPlacement ccp = ccps.get( 0 );
-                CatalogPartitionPlacement cpp = catalog.getPartitionPlacement( ccp.adapterId, partitionId );
+                CatalogPartitionPlacement cpp = catalog.getPartitionPlacement( ccp.adapterId, ccp.tableId, partitionId );
 
                 builder = handleScan(
                         builder,
@@ -271,7 +271,7 @@ public abstract class BaseRouter implements Router {
                 boolean first = true;
                 for ( List<CatalogColumnPlacement> ccps : placementsByAdapter.values() ) {
                     CatalogColumnPlacement ccp = ccps.get( 0 );
-                    CatalogPartitionPlacement cpp = catalog.getPartitionPlacement( ccp.adapterId, partitionId );
+                    CatalogPartitionPlacement cpp = catalog.getPartitionPlacement( ccp.adapterId, ccp.tableId, partitionId );
 
                     handleScan(
                             builder,

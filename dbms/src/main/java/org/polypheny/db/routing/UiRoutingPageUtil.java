@@ -96,7 +96,7 @@ public class UiRoutingPageUtil {
                 CatalogTable catalogTable = Catalog.getInstance().getTable( catalogPartition.tableId );
                 v.forEach( p -> {
                     CatalogColumnPlacement catalogColumnPlacement = Catalog.getInstance().getColumnPlacement( p.left, p.right );
-                    CatalogPartitionPlacement catalogPartitionPlacement = Catalog.getInstance().getPartitionPlacement( p.left, k );
+                    CatalogPartitionPlacement catalogPartitionPlacement = Catalog.getInstance().getPartitionPlacement( p.left, catalogTable.id, k );
                     CatalogColumn catalogColumn = Catalog.getInstance().getColumn( catalogColumnPlacement.columnId );
                     table.addRow(
                             catalogTable.getNamespaceName() + "." + catalogTable.name,

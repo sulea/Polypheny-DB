@@ -489,7 +489,7 @@ public abstract class Catalog {
      */
     public abstract long addTable( String name, long namespaceId, int ownerId, EntityType entityType, boolean modifiable );
 
-    public abstract CatalogTable transferTable(CatalogTable sourceTable, long targetNamespaceId );
+    public abstract CatalogTable transferTable(CatalogTable sourceTable, long targetNamespaceId ) throws GenericCatalogException;
 
 
     /**
@@ -1709,28 +1709,31 @@ public abstract class Catalog {
      * Change physical names of a partition placement.
      *
      * @param adapterId The id of the adapter
+     * @param tableId The id of the table
      * @param partitionId The id of the partition
      * @param physicalSchemaName The physical schema name
      * @param physicalTableName The physical table name
      */
-    public abstract void updatePartitionPlacementPhysicalNames( int adapterId, long partitionId, String physicalSchemaName, String physicalTableName );
+    public abstract void updatePartitionPlacementPhysicalNames( int adapterId, long tableId, long partitionId, String physicalSchemaName, String physicalTableName );
 
     /**
      * Deletes a placement for a partition.
      *
      * @param adapterId The adapter on which the table should be placed on
+     * @param tableId The table which the partition has
      * @param partitionId The id of a partition which shall be removed from that store.
      */
-    public abstract void deletePartitionPlacement( int adapterId, long partitionId );
+    public abstract void deletePartitionPlacement( int adapterId, long tableId, long partitionId );
 
     /**
      * Returns a specific partition entity which is placed on a store.
      *
      * @param adapterId The adapter on which the requested partition placements reside
+     * @param tableId The table which the partition has
      * @param partitionId The id of the requested partition
      * @return The requested PartitionPlacement on that store for a given is
      */
-    public abstract CatalogPartitionPlacement getPartitionPlacement( int adapterId, long partitionId );
+    public abstract CatalogPartitionPlacement getPartitionPlacement( int adapterId, long tableId, long partitionId );
 
     /**
      * Returns a list of all Partition Placements which currently reside on a adapter, disregarded of the table.
@@ -1791,10 +1794,11 @@ public abstract class Catalog {
      * Probes if a Partition Placement on a adapter for a specific partition already exists.
      *
      * @param adapterId Adapter on which to check
+     * @param tableId Table which to check
      * @param partitionId Partition which to check
      * @return teh response of the probe
      */
-    public abstract boolean checkIfExistsPartitionPlacement( int adapterId, long partitionId );
+    public abstract boolean checkIfExistsPartitionPlacement( int adapterId, long tableId, long partitionId );
 
     /**
      * Deletes all the dependencies of a view. This is used when deleting a view.

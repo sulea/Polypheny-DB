@@ -173,7 +173,7 @@ public class CatalogImpl extends Catalog {
 
     private static BTreeMap<Long, CatalogPartitionGroup> partitionGroups;
     private static BTreeMap<Long, CatalogPartition> partitions;
-    private static BTreeMap<Object[], CatalogPartitionPlacement> partitionPlacements; // (AdapterId, Partition)
+    private static BTreeMap<Object[], CatalogPartitionPlacement> partitionPlacements; // (AdapterId, TableId, PartitionId)
 
     // Container Object that contains all other placements
     private static BTreeMap<Object[], CatalogDataPlacement> dataPlacements; // (AdapterId, TableId) -> CatalogDataPlacement
@@ -665,7 +665,7 @@ public class CatalogImpl extends Catalog {
         partitionGroups = db.treeMap( "partitionGroups", Serializer.LONG, Serializer.JAVA ).createOrOpen();
         partitions = db.treeMap( "partitions", Serializer.LONG, Serializer.JAVA ).createOrOpen();
 
-        partitionPlacements = db.treeMap( "partitionPlacements", new SerializerArrayTuple( Serializer.INTEGER, Serializer.LONG ), Serializer.JAVA ).createOrOpen();
+        partitionPlacements = db.treeMap( "partitionPlacements", new SerializerArrayTuple( Serializer.INTEGER, Serializer.LONG, Serializer.LONG ), Serializer.JAVA ).createOrOpen();
 
         // Restores all Tables dependent on periodic checks like TEMPERATURE Partitioning
         frequencyDependentTables = tables.values().stream().filter( t -> t.partitionProperty.reliesOnPeriodicChecks ).map( t -> t.id ).collect( Collectors.toSet() );
@@ -1892,7 +1892,7 @@ public class CatalogImpl extends Catalog {
     }
 
     @Override
-    public CatalogTable transferTable(CatalogTable sourceTable, long targetNamespaceId ) {
+    public CatalogTable transferTable(CatalogTable sourceTable, long targetNamespaceId ) throws GenericCatalogException {
         long targetTableId = entityIdBuilder.getAndIncrement();
         CatalogTable targetTable;
         synchronized ( this ) {
@@ -1903,11 +1903,11 @@ public class CatalogImpl extends Catalog {
             // TODO: dies wird nur dann gemacht wenn zwischen den gleichen namespacetzpes kopieren
 
             Map<Long, Long> sourceTargetColumnIdMap = new HashMap<>();
-            for( Long fieldId: sourceTable.fieldIds ) {
+            for ( Long fieldId: sourceTable.fieldIds ) {
                 long targetColumnId = columnIdBuilder.getAndIncrement();
-                sourceTargetColumnIdMap.put(fieldId, targetColumnId);
+                CatalogColumn targetColumn = transferColumn( columns.get( fieldId ), targetNamespaceId, targetTableId, targetColumnId );
 
-                CatalogColumn targetColumn = transferColumn(columns.get( fieldId ), targetNamespaceId, targetColumnId );
+                sourceTargetColumnIdMap.put(fieldId, targetColumnId);
                 columns.put( targetColumnId, targetColumn );
                 columnNames.put( new Object[]{ sourceTable.databaseId, targetNamespaceId, targetTableId, targetColumn.name }, targetColumn );
                 fieldIds.add(targetColumnId);
@@ -1921,11 +1921,20 @@ public class CatalogImpl extends Catalog {
             }
 
             // transfer Partitions and Dataplacements.
+            long targetPartitionGroupId = partitionGroupIdBuilder.getAndIncrement();
             CatalogPartitionGroup targetPartitionGroup = transferPartitionGroup( partitionGroups.get( sourceTable.id ),
-                    targetNamespaceId, targetTableId );
-            partitionGroups.put( targetTableId, targetPartitionGroup);
+                    targetNamespaceId, targetTableId, targetPartitionGroupId );
+            partitionGroups.put( targetPartitionGroupId, targetPartitionGroup);
 
             for ( CatalogDataPlacement sourceDataPlacement : getDataPlacements( sourceTable.id ) ) {
+                for ( Long fieldId : sourceTable.fieldIds ) {
+                    CatalogColumnPlacement sourceColumnPlacement =
+                            columnPlacements.get( new Object[]{ sourceDataPlacement.adapterId, fieldId } );
+                    Long targetColumnId = sourceTargetColumnIdMap.get( fieldId );
+                    columnPlacements.put( new Object[]{ sourceColumnPlacement.adapterId, targetColumnId },
+                            transferColumnPlacement( sourceColumnPlacement, targetTableId, targetColumnId ) );
+                }
+
                 CatalogDataPlacement targetDataPlacement =
                         transferDataPlacement( sourceDataPlacement, targetTableId, sourceTargetColumnIdMap );
                 dataPlacements.put( new Object[]{targetDataPlacement.adapterId, targetTableId}, targetDataPlacement );
@@ -1933,7 +1942,7 @@ public class CatalogImpl extends Catalog {
 
             for ( CatalogPartitionPlacement sourcePartitionPlacement : getAllPartitionPlacementsByTable( sourceTable.id ) ) {
                 CatalogPartitionPlacement targetPartitionPlacement = transferPartitionPlacement( sourcePartitionPlacement, targetTableId );
-                partitionPlacements.put( new Object[]{ targetPartitionPlacement.adapterId, sourcePartitionPlacement.partitionId },
+                partitionPlacements.put( new Object[]{ targetPartitionPlacement.adapterId, targetTableId, sourcePartitionPlacement.partitionId },
                         targetPartitionPlacement );
             }
 
@@ -1943,9 +1952,21 @@ public class CatalogImpl extends Catalog {
                     .addAll( schemaChildren.get(targetNamespaceId ) )
                     .add( targetTableId )
                     .build();
+            tableChildren.put( targetTableId, ImmutableList.copyOf(fieldIds) );
             tables.put( targetTableId, targetTable );
             tableNames.put( new Object[]{ targetTable.databaseId, targetNamespaceId, targetTable.name }, targetTable );
             schemaChildren.replace( targetNamespaceId, extendedTargetSchemaChildren );
+
+            for ( CatalogKey sourceKey : getTableKeys( sourceTable.id ) ) {
+                ImmutableList<Long> targetColumnIds = ImmutableList.<Long>builder()
+                        .addAll(new ArrayList<>(sourceKey.columnIds)
+                                .stream()
+                                .map(x -> sourceTargetColumnIdMap.get(x))
+                                .collect(Collectors.toList()))
+                        .build();
+                long targetKeyId = getOrAddKey( targetTableId, targetColumnIds, EnforcementTime.ON_QUERY );
+                setPrimaryKey( targetTableId, targetKeyId );
+            }
 
             if ( getSchema( targetNamespaceId ).namespaceType == NamespaceType.DOCUMENT ) {
                 CatalogCollection targetCatalogCollection = new CatalogCollection(
@@ -1978,6 +1999,8 @@ public class CatalogImpl extends Catalog {
 
         return targetTable;
     }
+
+
 
     /**
      * {@inheritDoc}
@@ -2383,9 +2406,9 @@ public class CatalogImpl extends Catalog {
      * {@inheritDoc}
      */
     @Override
-    public void updatePartitionPlacementPhysicalNames( int adapterId, long partitionId, String physicalSchemaName, String physicalTableName ) {
+    public void updatePartitionPlacementPhysicalNames( int adapterId, long tableId, long partitionId, String physicalSchemaName, String physicalTableName ) {
         try {
-            CatalogPartitionPlacement old = Objects.requireNonNull( partitionPlacements.get( new Object[]{ adapterId, partitionId } ) );
+            CatalogPartitionPlacement old = Objects.requireNonNull( partitionPlacements.get( new Object[]{ adapterId, tableId, partitionId } ) );
             CatalogPartitionPlacement placement = new CatalogPartitionPlacement(
                     old.tableId,
                     old.adapterId,
@@ -2397,13 +2420,14 @@ public class CatalogImpl extends Catalog {
                     old.role );
 
             synchronized ( this ) {
-                partitionPlacements.replace( new Object[]{ adapterId, partitionId }, placement );
+                partitionPlacements.replace( new Object[]{ adapterId, tableId, partitionId }, placement );
                 listeners.firePropertyChange( "partitionPlacement", old, placement );
             }
         } catch ( NullPointerException e ) {
             getAdapter( adapterId );
+            getTable( tableId );
             getPartition( partitionId );
-            throw new UnknownPartitionPlacementException( adapterId, partitionId );
+            throw new UnknownPartitionPlacementException( adapterId, tableId, partitionId );
         }
     }
 
@@ -4303,7 +4327,7 @@ public class CatalogImpl extends Catalog {
         getPartition( partitionId );
         synchronized ( this ) {
             for ( CatalogPartitionPlacement partitionPlacement : getPartitionPlacements( partitionId ) ) {
-                deletePartitionPlacement( partitionPlacement.adapterId, partitionId );
+                deletePartitionPlacement( partitionPlacement.adapterId, tableId, partitionId );
             }
             partitions.remove( partitionId );
         }
@@ -4711,10 +4735,10 @@ public class CatalogImpl extends Catalog {
     public List<CatalogPartitionPlacement> getPartitionPlacementsByRole( long tableId, DataPlacementRole role ) {
         List<CatalogPartitionPlacement> partitionPlacements = new ArrayList<>();
         for ( CatalogDataPlacement dataPlacement : getDataPlacementsByRole( tableId, role ) ) {
-            if ( dataPlacement.structurizePartitionPlacementsOnAdapterByRole.containsKey( role ) ) {
-                dataPlacement.structurizePartitionPlacementsOnAdapterByRole.get( role )
+            if ( dataPlacement.structurizedPartitionPlacementsOnAdapterByRole.containsKey( role ) ) {
+                dataPlacement.structurizedPartitionPlacementsOnAdapterByRole.get( role )
                         .forEach(
-                                partitionId -> partitionPlacements.add( getPartitionPlacement( dataPlacement.adapterId, partitionId ) )
+                                partitionId -> partitionPlacements.add( getPartitionPlacement( dataPlacement.adapterId, tableId, partitionId ) )
                         );
             }
         }
@@ -4827,7 +4851,7 @@ public class CatalogImpl extends Catalog {
      */
     @Override
     public void addPartitionPlacement( int adapterId, long tableId, long partitionId, PlacementType placementType, String physicalSchemaName, String physicalTableName, DataPlacementRole role ) {
-        if ( !checkIfExistsPartitionPlacement( adapterId, partitionId ) ) {
+        if ( !checkIfExistsPartitionPlacement( adapterId, tableId, partitionId ) ) {
             CatalogAdapter store = Objects.requireNonNull( adapters.get( adapterId ) );
             CatalogPartitionPlacement partitionPlacement = new CatalogPartitionPlacement(
                     tableId,
@@ -4840,7 +4864,7 @@ public class CatalogImpl extends Catalog {
                     role );
 
             synchronized ( this ) {
-                partitionPlacements.put( new Object[]{ adapterId, partitionId }, partitionPlacement );
+                partitionPlacements.put( new Object[]{ adapterId, tableId, partitionId }, partitionPlacement );
 
                 // Adds this PartitionPlacement to existing DataPlacement container
                 addPartitionsToDataPlacement( adapterId, tableId, Arrays.asList( partitionId ) );
@@ -5094,7 +5118,7 @@ public class CatalogImpl extends Catalog {
         // Recursively removing partitions that exist on this placement
         for ( Long partitionId : dataPlacement.getAllPartitionIds() ) {
             try {
-                deletePartitionPlacement( adapterId, partitionId );
+                deletePartitionPlacement( adapterId, tableId, partitionId );
             } catch ( UnknownColumnIdRuntimeException e ) {
                 log.debug( "Partition has been removed before the placement" );
             }
@@ -5273,11 +5297,11 @@ public class CatalogImpl extends Catalog {
      * {@inheritDoc}
      */
     @Override
-    public void deletePartitionPlacement( int adapterId, long partitionId ) {
-        if ( checkIfExistsPartitionPlacement( adapterId, partitionId ) ) {
+    public void deletePartitionPlacement( int adapterId, long tableId, long partitionId ) {
+        if ( checkIfExistsPartitionPlacement( adapterId, tableId, partitionId ) ) {
             synchronized ( this ) {
-                partitionPlacements.remove( new Object[]{ adapterId, partitionId } );
-                removePartitionsFromDataPlacement( adapterId, getTableFromPartition( partitionId ).id, Arrays.asList( partitionId ) );
+                partitionPlacements.remove( new Object[]{ adapterId, tableId, partitionId } );
+                removePartitionsFromDataPlacement( adapterId, tableId, Arrays.asList( partitionId ) );
             }
         }
     }
@@ -5287,13 +5311,13 @@ public class CatalogImpl extends Catalog {
      * {@inheritDoc}
      */
     @Override
-    public CatalogPartitionPlacement getPartitionPlacement( int adapterId, long partitionId ) {
+    public CatalogPartitionPlacement getPartitionPlacement( int adapterId, long tableId, long partitionId ) {
         try {
-            return Objects.requireNonNull( partitionPlacements.get( new Object[]{ adapterId, partitionId } ) );
+            return Objects.requireNonNull( partitionPlacements.get( new Object[]{ adapterId, tableId, partitionId } ) );
         } catch ( NullPointerException e ) {
             getAdapter( adapterId );
             getPartition( partitionId );
-            throw new UnknownPartitionPlacementException( adapterId, partitionId );
+            throw new UnknownPartitionPlacementException( adapterId, tableId, partitionId );
         }
     }
 
@@ -5403,8 +5427,8 @@ public class CatalogImpl extends Catalog {
      * {@inheritDoc}
      */
     @Override
-    public boolean checkIfExistsPartitionPlacement( int adapterId, long partitionId ) {
-        CatalogPartitionPlacement placement = partitionPlacements.get( new Object[]{ adapterId, partitionId } );
+    public boolean checkIfExistsPartitionPlacement( int adapterId, long tableId, long partitionId ) {
+        CatalogPartitionPlacement placement = partitionPlacements.get( new Object[]{ adapterId, tableId, partitionId } );
         return placement != null;
     }
 
@@ -5559,11 +5583,11 @@ public class CatalogImpl extends Catalog {
     }
 
     @NotNull
-    private static CatalogColumn transferColumn(CatalogColumn sourceCatalogColumn, long targetNamespaceId, long targetColumnId) {
+    private static CatalogColumn transferColumn(CatalogColumn sourceCatalogColumn, long targetNamespaceId, long targetTableId, long targetColumnId) {
         CatalogColumn targetCatalogColumn = new CatalogColumn(
                 targetColumnId,
                 sourceCatalogColumn.name,
-                sourceCatalogColumn.tableId,
+                targetTableId,
                 targetNamespaceId,
                 sourceCatalogColumn.databaseId,
                 sourceCatalogColumn.position,
@@ -5579,9 +5603,33 @@ public class CatalogImpl extends Catalog {
         return targetCatalogColumn;
     }
 
+    private CatalogColumnPlacement transferColumnPlacement(CatalogColumnPlacement sourceColumnPlacement, long targetTableId, long targetColumnId) {
+        return new CatalogColumnPlacement(
+                targetTableId,
+                targetColumnId,
+                sourceColumnPlacement.adapterId,
+                sourceColumnPlacement.adapterUniqueName,
+                sourceColumnPlacement.placementType,
+                sourceColumnPlacement.physicalSchemaName,
+                sourceColumnPlacement.physicalColumnName,
+                sourceColumnPlacement.physicalPosition);
+    }
 
     @NotNull
     private CatalogTable transferTable(CatalogTable sourceTable, long targetNamespaceId, long targetTableId, ImmutableList<Long> fieldIds ) {
+
+        PartitionProperty targetPartitionProperty = PartitionProperty
+                .builder( )
+                .partitionType( sourceTable.partitionProperty.partitionType )
+                .isPartitioned( sourceTable.partitionProperty.isPartitioned)
+                .partitionGroupIds( ImmutableList.of( targetTableId ) ) // TODO: what if we had multiple PartitionGroups
+                .partitionIds( sourceTable.partitionProperty.partitionIds )
+                .partitionColumnId( sourceTable.partitionProperty.partitionColumnId ) // TODO: we have to map the sourcolumnid to the targetcolumndId
+                .numPartitionGroups( sourceTable.partitionProperty.numPartitionGroups )
+                .numPartitions( sourceTable.partitionProperty.numPartitions )
+                .reliesOnPeriodicChecks( sourceTable.partitionProperty.reliesOnPeriodicChecks )
+                .build( );
+
         return new CatalogTable(
                 targetTableId,
                 sourceTable.name,
@@ -5593,13 +5641,13 @@ public class CatalogImpl extends Catalog {
                 sourceTable.primaryKey,
                 sourceTable.dataPlacements,
                 sourceTable.modifiable,
-                sourceTable.partitionProperty,
-                sourceTable.connectedViews);
+                targetPartitionProperty,
+                sourceTable.connectedViews );
     }
 
-    private CatalogPartitionGroup transferPartitionGroup(CatalogPartitionGroup catalogPartitionGroup, long targetNamespaceId, long targetTableId) {
+    private CatalogPartitionGroup transferPartitionGroup(CatalogPartitionGroup catalogPartitionGroup, long targetNamespaceId, long targetTableId, long targetPartitionGroupId) {
         return new CatalogPartitionGroup(
-                targetTableId,
+                targetPartitionGroupId,
                 catalogPartitionGroup.partitionGroupName,
                 targetTableId,
                 targetNamespaceId,

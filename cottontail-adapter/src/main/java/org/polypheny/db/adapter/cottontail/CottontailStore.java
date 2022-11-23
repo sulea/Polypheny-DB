@@ -240,6 +240,7 @@ public class CottontailStore extends DataStore {
             final String physicalTableName = CottontailNameUtil.createPhysicalTableName( combinedTable.id, partitionId );
             catalog.updatePartitionPlacementPhysicalNames(
                     getAdapterId(),
+                    combinedTable.id,
                     partitionId,
                     this.dbName,
                     physicalTableName );
@@ -303,10 +304,10 @@ public class CottontailStore extends DataStore {
         final long txId = this.wrapper.beginOrContinue( context.getStatement().getTransaction() );
 
         List<CatalogPartitionPlacement> partitionPlacements = new ArrayList<>();
-        partitionIds.forEach( id -> partitionPlacements.add( catalog.getPartitionPlacement( getAdapterId(), id ) ) );
+        partitionIds.forEach( id -> partitionPlacements.add( catalog.getPartitionPlacement( getAdapterId(), combinedTable.id, id ) ) );
 
         for ( CatalogPartitionPlacement partitionPlacement : partitionPlacements ) {
-            catalog.deletePartitionPlacement( getAdapterId(), partitionPlacement.partitionId );
+            catalog.deletePartitionPlacement( getAdapterId(), combinedTable.id, partitionPlacement.partitionId );
             /* Prepare DROP TABLE message. */
             final String physicalTableName = partitionPlacement.physicalTableName;
             final EntityName tableEntity = EntityName.newBuilder()
@@ -395,6 +396,7 @@ public class CottontailStore extends DataStore {
 
             catalog.updatePartitionPlacementPhysicalNames(
                     getAdapterId(),
+                    catalogTable.id,
                     partitionPlacement.partitionId,
                     partitionPlacement.physicalSchemaName,
                     newPhysicalTableName );
@@ -478,6 +480,7 @@ public class CottontailStore extends DataStore {
 
             catalog.updatePartitionPlacementPhysicalNames(
                     getAdapterId(),
+                    catalogTable.id,
                     partitionPlacement.partitionId,
                     partitionPlacement.physicalSchemaName,
                     newPhysicalTableName );
@@ -505,7 +508,7 @@ public class CottontailStore extends DataStore {
         final long txId = this.wrapper.beginOrContinue( context.getStatement().getTransaction() );
 
         List<CatalogPartitionPlacement> partitionPlacements = new ArrayList<>();
-        partitionIds.forEach( id -> partitionPlacements.add( catalog.getPartitionPlacement( getAdapterId(), id ) ) );
+        partitionIds.forEach( id -> partitionPlacements.add( catalog.getPartitionPlacement( getAdapterId(), catalogIndex.key.tableId, id ) ) );
         for ( CatalogPartitionPlacement partitionPlacement : partitionPlacements ) {
 
             /* Prepare CREATE INDEX message. */
@@ -541,6 +544,7 @@ public class CottontailStore extends DataStore {
         final long txId = this.wrapper.beginOrContinue( context.getStatement().getTransaction() );
         CatalogPartitionPlacement partitionPlacement = catalog.getPartitionPlacement(
                 getAdapterId(),
+                catalogIndex.key.tableId,
                 catalog.getTable( catalogIndex.key.tableId ).partitionProperty.partitionIds.get( 0 ) );
         /* Prepare DROP INDEX message. */
         final DropIndexMessage.Builder dropIndex = DropIndexMessage.newBuilder().setMetadata( Metadata.newBuilder().setTransactionId( txId ).build() );
@@ -646,6 +650,7 @@ public class CottontailStore extends DataStore {
 
             catalog.updatePartitionPlacementPhysicalNames(
                     getAdapterId(),
+                    catalogColumn.tableId,
                     partitionPlacement.partitionId,
                     partitionPlacement.physicalSchemaName,
                     newPhysicalTableName );

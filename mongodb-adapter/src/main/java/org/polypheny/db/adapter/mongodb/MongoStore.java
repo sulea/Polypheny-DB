@@ -274,6 +274,7 @@ public class MongoStore extends DataStore {
 
             catalog.updatePartitionPlacementPhysicalNames(
                     getAdapterId(),
+                    catalogTable.id,
                     partitionId,
                     catalogTable.getNamespaceName(),
                     physicalTableName );
@@ -328,10 +329,10 @@ public class MongoStore extends DataStore {
         context.getStatement().getTransaction().registerInvolvedAdapter( this );
         //transactionProvider.startTransaction();
         List<CatalogPartitionPlacement> partitionPlacements = new ArrayList<>();
-        partitionIds.forEach( id -> partitionPlacements.add( catalog.getPartitionPlacement( getAdapterId(), id ) ) );
+        partitionIds.forEach( id -> partitionPlacements.add( catalog.getPartitionPlacement( getAdapterId(), combinedTable.id, id ) ) );
 
         for ( CatalogPartitionPlacement partitionPlacement : partitionPlacements ) {
-            catalog.deletePartitionPlacement( getAdapterId(), partitionPlacement.partitionId );
+            catalog.deletePartitionPlacement( getAdapterId(), combinedTable.id, partitionPlacement.partitionId );
             //this.currentSchema.database.getCollection( getPhysicalTableName( combinedTable.id ) ).drop();
             this.currentSchema.database.getCollection( partitionPlacement.physicalTableName ).drop();
         }
@@ -345,7 +346,7 @@ public class MongoStore extends DataStore {
         // updates all columns with this field if a default value is provided
 
         List<CatalogPartitionPlacement> partitionPlacements = new ArrayList<>();
-        catalogTable.partitionProperty.partitionIds.forEach( id -> partitionPlacements.add( catalog.getPartitionPlacement( getAdapterId(), id ) ) );
+        catalogTable.partitionProperty.partitionIds.forEach( id -> partitionPlacements.add( catalog.getPartitionPlacement( getAdapterId(), catalogTable.id, id ) ) );
 
         for ( CatalogPartitionPlacement partitionPlacement : partitionPlacements ) {
             Document field;
@@ -430,7 +431,7 @@ public class MongoStore extends DataStore {
         IndexTypes type = IndexTypes.valueOf( catalogIndex.method.toUpperCase( Locale.ROOT ) );
 
         List<CatalogPartitionPlacement> partitionPlacements = new ArrayList<>();
-        partitionIds.forEach( id -> partitionPlacements.add( catalog.getPartitionPlacement( getAdapterId(), id ) ) );
+        partitionIds.forEach( id -> partitionPlacements.add( catalog.getPartitionPlacement( getAdapterId(), catalogIndex.key.tableId, id ) ) );
 
         String physicalIndexName = getPhysicalIndexName( catalogIndex );
 
@@ -486,7 +487,7 @@ public class MongoStore extends DataStore {
     @Override
     public void dropIndex( Context context, CatalogIndex catalogIndex, List<Long> partitionIds ) {
         List<CatalogPartitionPlacement> partitionPlacements = new ArrayList<>();
-        partitionIds.forEach( id -> partitionPlacements.add( catalog.getPartitionPlacement( getAdapterId(), id ) ) );
+        partitionIds.forEach( id -> partitionPlacements.add( catalog.getPartitionPlacement( getAdapterId(), catalogIndex.key.tableId, id ) ) );
 
         commitAll();
         context.getStatement().getTransaction().registerInvolvedAdapter( this );
@@ -499,7 +500,7 @@ public class MongoStore extends DataStore {
     @Override
     public void updateColumnType( Context context, CatalogColumnPlacement columnPlacement, CatalogColumn catalogColumn, PolyType polyType ) {
         String name = columnPlacement.physicalColumnName;
-        CatalogPartitionPlacement partitionPlacement = catalog.getPartitionPlacement( getAdapterId(), catalog.getTable( columnPlacement.tableId ).partitionProperty.partitionIds.get( 0 ) );
+        CatalogPartitionPlacement partitionPlacement = catalog.getPartitionPlacement( getAdapterId(), columnPlacement.tableId, catalog.getTable( columnPlacement.tableId ).partitionProperty.partitionIds.get( 0 ) );
         BsonDocument filter = new BsonDocument();
         List<BsonDocument> updates = Collections.singletonList( new BsonDocument( "$set", new BsonDocument( name, new BsonDocument( "$convert", new BsonDocument()
                 .append( "input", new BsonString( "$" + name ) )

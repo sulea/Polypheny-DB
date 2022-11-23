@@ -163,6 +163,7 @@ public class FileStore extends DataStore {
         for ( long partitionId : partitionIds ) {
             catalog.updatePartitionPlacementPhysicalNames(
                     getAdapterId(),
+                    catalogTable.id,
                     partitionId,
                     "unused",
                     "unused" );
@@ -192,7 +193,7 @@ public class FileStore extends DataStore {
         // TODO check if it is on this store?
 
         for ( long partitionId : partitionIds ) {
-            catalog.deletePartitionPlacement( getAdapterId(), partitionId );
+            catalog.deletePartitionPlacement( getAdapterId(), catalogTable.id, partitionId );
             for ( Long colId : catalogTable.fieldIds ) {
                 File f = getColumnFolder( colId, partitionId );
                 try {

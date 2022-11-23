@@ -299,7 +299,7 @@ public class CassandraStore extends DataStore {
     public void dropTable( Context context, CatalogTable catalogTable, List<Long> partitionIds ) {
         CassandraPhysicalNameProvider physicalNameProvider = new CassandraPhysicalNameProvider( this.getAdapterId() );
         String physicalTableName = physicalNameProvider.getPhysicalTableName( catalogTable.id );
-        partitionIds.forEach( partitionId -> catalog.deletePartitionPlacement( getAdapterId(), partitionId ) );
+        partitionIds.forEach( partitionId -> catalog.deletePartitionPlacement( getAdapterId(), catalogTable.id, partitionId ) );
         SimpleStatement dropTable = SchemaBuilder.dropTable( this.dbKeyspace, physicalTableName ).build();
 
         context.getStatement().getTransaction().registerInvolvedAdapter( this );
@@ -334,7 +334,7 @@ public class CassandraStore extends DataStore {
 //        public void dropColumn( Context context, CatalogCombinedTable catalogEntity, CatalogColumn catalogColumn ) {
 //        CassandraPhysicalNameProvider physicalNameProvider = new CassandraPhysicalNameProvider( context.getStatement().getTransaction().getCatalog(), this.getStoreId() );
 
-        CatalogPartitionPlacement partitionPlacement = catalog.getPartitionPlacement( getAdapterId(), catalog.getTable( columnPlacement.tableId ).partitionProperty.partitionIds.get( 0 ) );
+        CatalogPartitionPlacement partitionPlacement = catalog.getPartitionPlacement( getAdapterId(), columnPlacement.tableId, catalog.getTable( columnPlacement.tableId ).partitionProperty.partitionIds.get( 0 ) );
 
         String physicalTableName = partitionPlacement.physicalTableName;
         String physicalColumnName = columnPlacement.physicalColumnName;

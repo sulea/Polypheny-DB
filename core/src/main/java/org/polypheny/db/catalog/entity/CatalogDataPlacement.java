@@ -54,7 +54,7 @@ public class CatalogDataPlacement implements CatalogObject {
 
     // Serves as a pre-aggregation to apply filters more easily. In that case reads are more important
     // and frequent than writes
-    public final ImmutableMap<DataPlacementRole, ImmutableList<Long>> structurizePartitionPlacementsOnAdapterByRole;
+    public final ImmutableMap<DataPlacementRole, ImmutableList<Long>> structurizedPartitionPlacementsOnAdapterByRole;
 
     public final ImmutableList<Long> partitionPlacementsOnAdapter;
 
@@ -81,7 +81,7 @@ public class CatalogDataPlacement implements CatalogObject {
         this.dataPlacementRole = dataPlacementRole;
         this.columnPlacementsOnAdapter = columnPlacementsOnAdapter;
         this.partitionPlacementsOnAdapter = partitionPlacementsOnAdapter;
-        this.structurizePartitionPlacementsOnAdapterByRole = structurizeDataPlacements( partitionPlacementsOnAdapter );
+        this.structurizedPartitionPlacementsOnAdapterByRole = structurizeDataPlacements( partitionPlacementsOnAdapter, this.tableId );
 
     }
 
@@ -114,7 +114,7 @@ public class CatalogDataPlacement implements CatalogObject {
 
 
     public List<Long> getAllPartitionIds() {
-        return structurizePartitionPlacementsOnAdapterByRole.values()
+        return structurizedPartitionPlacementsOnAdapterByRole.values()
                 .stream()
                 .flatMap( List::stream )
                 .collect( Collectors.toList() );
@@ -127,7 +127,7 @@ public class CatalogDataPlacement implements CatalogObject {
     }
 
 
-    private ImmutableMap<DataPlacementRole, ImmutableList<Long>> structurizeDataPlacements( @NonNull final ImmutableList<Long> unsortedPartitionIds ) {
+    private ImmutableMap<DataPlacementRole, ImmutableList<Long>> structurizeDataPlacements( @NonNull final ImmutableList<Long> unsortedPartitionIds, long tableId ) {
         // Since this shall only be called after initialization of dataPlacement object,
         // we need to clear the contents of partitionPlacementsOnAdapterByRole
         Map<DataPlacementRole, ImmutableList<Long>> partitionsPerRole = new HashMap<>();
@@ -137,7 +137,7 @@ public class CatalogDataPlacement implements CatalogObject {
             if ( !unsortedPartitionIds.isEmpty() ) {
                 CatalogPartitionPlacement partitionPlacement;
                 for ( long partitionId : unsortedPartitionIds ) {
-                    partitionPlacement = catalog.getPartitionPlacement( this.adapterId, partitionId );
+                    partitionPlacement = catalog.getPartitionPlacement( this.adapterId, tableId, partitionId );
                     DataPlacementRole role = partitionPlacement.role;
 
                     List<Long> partitions = new ArrayList<>();

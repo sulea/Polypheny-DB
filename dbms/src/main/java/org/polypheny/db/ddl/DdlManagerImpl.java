@@ -455,7 +455,7 @@ public class DdlManagerImpl extends DdlManager {
         int adapterId = catalog.getColumnPlacement( catalogTable.fieldIds.get( 0 ) ).get( 0 ).adapterId;
         DataSource dataSource = (DataSource) AdapterManager.getInstance().getAdapter( adapterId );
 
-        String physicalTableName = catalog.getPartitionPlacement( adapterId, catalogTable.partitionProperty.partitionIds.get( 0 ) ).physicalTableName;
+        String physicalTableName = catalog.getPartitionPlacement( adapterId, catalogTable.id, catalogTable.partitionProperty.partitionIds.get( 0 ) ).physicalTableName;
         List<ExportedColumn> exportedColumns = dataSource.getExportedColumns().get( physicalTableName );
 
         // Check if physicalColumnName is valid
@@ -2254,7 +2254,11 @@ public class DdlManagerImpl extends DdlManager {
         if ( assertEntityExists( targetSchemaId, sourceTable.name, true ) ) {
             return;
         }
-        CatalogTable targetCatalogTable = catalog.transferTable(sourceTable, targetSchemaId);
+        try {
+            CatalogTable targetCatalogTable = catalog.transferTable(sourceTable, targetSchemaId);
+        } catch ( GenericCatalogException e ) {
+            throw new RuntimeException( e );
+        }
 
         catalog.deleteTable(sourceTable.id);
 

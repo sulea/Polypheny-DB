@@ -144,6 +144,7 @@ public abstract class AbstractJdbcStore extends DataStore {
 
             catalog.updatePartitionPlacementPhysicalNames(
                     getAdapterId(),
+                    catalogTable.id,
                     partitionId,
                     getDefaultPhysicalSchemaName(),
                     physicalTableName );
@@ -315,10 +316,10 @@ public abstract class AbstractJdbcStore extends DataStore {
         String physicalSchemaName;
 
         List<CatalogPartitionPlacement> partitionPlacements = new ArrayList<>();
-        partitionIds.forEach( id -> partitionPlacements.add( catalog.getPartitionPlacement( getAdapterId(), id ) ) );
+        partitionIds.forEach( id -> partitionPlacements.add( catalog.getPartitionPlacement( getAdapterId(), catalogTable.id, id ) ) );
 
         for ( CatalogPartitionPlacement partitionPlacement : partitionPlacements ) {
-            catalog.deletePartitionPlacement( getAdapterId(), partitionPlacement.partitionId );
+            catalog.deletePartitionPlacement( getAdapterId(), catalogTable.id, partitionPlacement.partitionId );
             physicalSchemaName = partitionPlacement.physicalSchemaName;
             physicalTableName = partitionPlacement.physicalTableName;
 
