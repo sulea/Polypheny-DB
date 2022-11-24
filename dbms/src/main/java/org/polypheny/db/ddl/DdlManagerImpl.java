@@ -2254,8 +2254,20 @@ public class DdlManagerImpl extends DdlManager {
         if ( assertEntityExists( targetSchemaId, sourceTable.name, true ) ) {
             return;
         }
+        NamespaceType sourceNamespaceType = catalog.getSchema(sourceTable.namespaceId).namespaceType;
+        NamespaceType targetNamespaceType = catalog.getSchema(targetSchemaId).namespaceType;
         try {
-            CatalogTable targetCatalogTable = catalog.transferTable(sourceTable, targetSchemaId);
+            CatalogTable targetTable = catalog.transferTable(sourceTable, targetSchemaId);
+            if ( targetNamespaceType == NamespaceType.DOCUMENT ) {
+                List<DataStore> stores = targetTable.dataPlacements
+                        .stream()
+                        .map(id -> (DataStore) AdapterManager.getInstance().getAdapter(id))
+                        .collect(Collectors.toList());
+                PlacementType placementType = catalog.getDataPlacement(targetTable.dataPlacements.get(0), targetTable.id).placementType;
+                createCollection( targetSchemaId, targetTable.name, false, stores, placementType, statement );
+                // targetTable.
+            }
+
         } catch ( GenericCatalogException e ) {
             throw new RuntimeException( e );
         }
